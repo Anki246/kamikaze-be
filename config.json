@@ -1,0 +1,82 @@
+{
+  "trading": {
+    "leverage": 20,
+    "trade_amount_usdt": 4,
+    "max_position_size_pct": 2.0,
+    "pump_threshold": 0.03,
+    "dump_threshold": -0.03,
+    "min_confidence": 35,
+    "signal_strength_threshold": 0.4,
+    "min_24h_change": 0.01,
+    "max_cycles": 100,
+    "allocation_strategy": "FIXED_AMOUNT",
+    "min_trade_amount": 5.0
+  },
+  "risk_management": {
+    "trailing_stop_loss": {
+      "level_1": 1.5,
+      "level_2": 2.5,
+      "level_3": 4.0
+    },
+    "trailing_take_profit": {
+      "level_1": 2.0,
+      "level_2": 3.5,
+      "level_3": 6.0
+    }
+  },
+  "trading_mode": {
+    "mode": "REAL",
+    "enable_real_trades": true,
+    "simulation_mode": false
+  },
+  "ai_settings": {
+    "min_confidence_threshold": 35,
+    "temperature": 0.1,
+    "max_tokens": 400,
+    "model": "llama3-8b-8192"
+  },
+  "market_analysis": {
+    "signal_strength_threshold": 0.4,
+    "momentum_threshold": 0.02,
+    "volume_threshold": 100000,
+    "volatility_threshold": 0.5
+  },
+  "trading_pairs": [
+    "BTCUSDT",
+    "ETHUSDT", 
+    "BNBUSDT",
+    "ADAUSDT",
+    "XRPUSDT",
+    "SOLUSDT",
+    "DOTUSDT",
+    "DOGEUSDT",
+    "AVAXUSDT",
+    "LINKUSDT"
+  ],
+  "logging": {
+    "log_level": "INFO",
+    "enable_file_logging": true,
+    "enable_console_logging": true,
+    "log_rotation": true,
+    "max_log_files": 10
+  },
+  "mcp_settings": {
+    "enabled": true,
+    "timeout_seconds": 10,
+    "retry_attempts": 3,
+    "health_check_interval": 30
+  },
+  "api_settings": {
+    "port": 8000,
+    "host": "0.0.0.0",
+    "enable_cors": true,
+    "request_timeout": 30
+  },
+  "database": {
+    "min_size": 5,
+    "max_size": 20,
+    "command_timeout": 60,
+    "ssl": false,
+    "pool_recycle": 3600
+  }
+}
