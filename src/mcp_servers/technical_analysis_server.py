@@ -1109,11 +1109,13 @@ class TechnicalAnalysisMCPServer:
                 "overbought": current_k > 80 and current_d > 80,
                 "oversold": current_k < 20 and current_d < 20,
                 "bullish_crossover": current_k > current_d,
-                "signal": "BUY"
-                if current_k < 20 and current_d < 20
-                else "SELL"
-                if current_k > 80 and current_d > 80
-                else "NEUTRAL",
+                "signal": (
+                    "BUY"
+                    if current_k < 20 and current_d < 20
+                    else "SELL"
+                    if current_k > 80 and current_d > 80
+                    else "NEUTRAL"
+                ),
             }
 
         except Exception as e:
