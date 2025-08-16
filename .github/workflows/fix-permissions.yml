@@ -1,0 +1,218 @@
+name: Fix Repository Permissions
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths: ['.github/workflows/fix-permissions.yml']
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+  id-token: write
+
+jobs:
+  diagnose-permissions:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🔍 Comprehensive Permissions Diagnosis
+      run: |
+        echo "=== COMPREHENSIVE GITHUB PERMISSIONS DIAGNOSIS ==="
+        echo "Repository: ${{ github.repository }}"
+        echo "Actor: ${{ github.actor }}"
+        echo "Event: ${{ github.event_name }}"
+        echo "Ref: ${{ github.ref }}"
+        echo "Run ID: ${{ github.run_id }}"
+        echo "Run Number: ${{ github.run_number }}"
+        echo ""
+        
+        echo "=== TOKEN AND PERMISSIONS CHECK ==="
+        if [ -n "$GITHUB_TOKEN" ]; then
+          echo "✅ GITHUB_TOKEN is available (length: ${#GITHUB_TOKEN})"
+        else
+          echo "❌ GITHUB_TOKEN is NOT available - THIS IS THE PROBLEM!"
+        fi
+        
+        echo ""
+        echo "=== REPOSITORY CONTEXT ==="
+        echo "Repository Owner: ${{ github.repository_owner }}"
+        echo "Repository Name: ${{ github.event.repository.name }}"
+        echo "Repository Private: ${{ github.event.repository.private }}"
+        echo "Repository Fork: ${{ github.event.repository.fork }}"
+        echo ""
+        
+        echo "=== ACTOR PERMISSIONS ==="
+        echo "Actor: ${{ github.actor }}"
+        echo "Actor Type: ${{ github.event.sender.type }}"
+        echo ""
+        
+        echo "=== WORKFLOW PERMISSIONS ==="
+        echo "Contents: read"
+        echo "Actions: read" 
+        echo "Security Events: write"
+        echo "ID Token: write"
+        echo ""
+        
+        echo "=== TESTING SECRETS ACCESS ==="
+        echo "Testing individual secrets..."
+        
+        # Test AWS credentials
+        if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+          echo "✅ AWS_ACCESS_KEY_ID accessible (length: ${#AWS_ACCESS_KEY_ID})"
+        else
+          echo "❌ AWS_ACCESS_KEY_ID not accessible"
+        fi
+        
+        if [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+          echo "✅ AWS_SECRET_ACCESS_KEY accessible (length: ${#AWS_SECRET_ACCESS_KEY})"
+        else
+          echo "❌ AWS_SECRET_ACCESS_KEY not accessible"
+        fi
+        
+        # Test other secrets
+        if [ -n "$GROQ_API_KEY" ]; then
+          echo "✅ GROQ_API_KEY accessible (length: ${#GROQ_API_KEY})"
+        else
+          echo "❌ GROQ_API_KEY not accessible"
+        fi
+        
+        if [ -n "$TEST_SECRET" ]; then
+          echo "✅ TEST_SECRET accessible: $TEST_SECRET"
+        else
+          echo "❌ TEST_SECRET not accessible"
+        fi
+        
+        echo ""
+        echo "=== DIAGNOSIS RESULTS ==="
+        
+        # Count available secrets
+        available=0
+        total=4
+        
+        [ -n "$AWS_ACCESS_KEY_ID" ] && ((available++))
+        [ -n "$AWS_SECRET_ACCESS_KEY" ] && ((available++))
+        [ -n "$GROQ_API_KEY" ] && ((available++))
+        [ -n "$TEST_SECRET" ] && ((available++))
+        
+        echo "Secrets accessible: $available/$total"
+        
+        if [ -z "$GITHUB_TOKEN" ]; then
+          echo ""
+          echo "🚨 ROOT CAUSE IDENTIFIED: GITHUB_TOKEN NOT AVAILABLE"
+          echo ""
+          echo "This indicates one of the following issues:"
+          echo "1. GitHub Actions is disabled for this repository"
+          echo "2. Workflow permissions are too restrictive"
+          echo "3. Organization-level restrictions are in place"
+          echo "4. Repository is in an organization with strict policies"
+          echo ""
+          echo "IMMEDIATE FIXES TO TRY:"
+          echo "1. Check repository Settings → Actions → General"
+          echo "2. Ensure 'Allow all actions and reusable workflows' is selected"
+          echo "3. Check organization settings if this is an org repository"
+          echo "4. Verify you have admin access to the repository"
+          
+        elif [ $available -eq 0 ]; then
+          echo ""
+          echo "🚨 ROOT CAUSE: SECRETS NOT ACCESSIBLE TO WORKFLOWS"
+          echo ""
+          echo "GitHub Token is available but secrets are not."
+          echo "This indicates:"
+          echo "1. Secrets are not added to the repository"
+          echo "2. Secrets are added but workflow can't access them"
+          echo "3. Organization-level secret restrictions"
+          echo ""
+          echo "FIXES:"
+          echo "1. Go to: https://github.com/${{ github.repository }}/settings/secrets/actions"
+          echo "2. Verify secrets are listed there"
+          echo "3. Check organization settings for secret restrictions"
+          
+        else
+          echo ""
+          echo "🎉 PARTIAL SUCCESS: Some secrets are accessible"
+          echo "Add the missing secrets to complete the setup"
+        fi
+        
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        TEST_SECRET: ${{ secrets.TEST_SECRET }}
+
+    - name: 🔧 Test Repository Settings Access
+      run: |
+        echo "=== TESTING REPOSITORY SETTINGS ACCESS ==="
+        echo ""
+        echo "Testing if we can access repository information..."
+        
+        # Test basic repository access
+        echo "Repository: ${{ github.repository }}"
+        echo "Default Branch: ${{ github.event.repository.default_branch }}"
+        echo "Actions Enabled: ${{ github.event.repository.has_actions }}"
+        echo ""
+        
+        echo "=== RECOMMENDED ACTIONS ==="
+        echo ""
+        echo "1. VERIFY REPOSITORY SETTINGS:"
+        echo "   Go to: https://github.com/${{ github.repository }}/settings"
+        echo "   Check if you can access this page"
+        echo ""
+        echo "2. CHECK ACTIONS SETTINGS:"
+        echo "   Go to: https://github.com/${{ github.repository }}/settings/actions"
+        echo "   Ensure Actions are enabled"
+        echo ""
+        echo "3. VERIFY SECRETS PAGE:"
+        echo "   Go to: https://github.com/${{ github.repository }}/settings/secrets/actions"
+        echo "   Check if secrets are listed"
+        echo ""
+        echo "4. CHECK ORGANIZATION SETTINGS (if applicable):"
+        echo "   If this repository is in an organization:"
+        echo "   - Check organization Actions policies"
+        echo "   - Verify secret sharing policies"
+        echo ""
+
+    - name: 📋 Create Fix Instructions
+      run: |
+        echo "=== STEP-BY-STEP FIX INSTRUCTIONS ==="
+        echo ""
+        echo "Based on the diagnosis, follow these steps:"
+        echo ""
+        echo "STEP 1: VERIFY REPOSITORY ACCESS"
+        echo "- Go to: https://github.com/${{ github.repository }}/settings"
+        echo "- Confirm you can access repository settings"
+        echo "- If not, you don't have admin access"
+        echo ""
+        echo "STEP 2: ENABLE GITHUB ACTIONS"
+        echo "- Go to: https://github.com/${{ github.repository }}/settings/actions"
+        echo "- Under 'Actions permissions', select:"
+        echo "  'Allow all actions and reusable workflows'"
+        echo "- Under 'Workflow permissions', select:"
+        echo "  'Read and write permissions'"
+        echo "- Click 'Save'"
+        echo ""
+        echo "STEP 3: ADD REPOSITORY SECRETS"
+        echo "- Go to: https://github.com/${{ github.repository }}/settings/secrets/actions"
+        echo "- Click 'New repository secret'"
+        echo "- Add each secret with EXACT name and value"
+        echo ""
+        echo "STEP 4: TEST AGAIN"
+        echo "- Re-run this workflow"
+        echo "- Should see secrets as accessible"
+        echo ""
+        echo "STEP 5: IF STILL FAILING"
+        echo "- Check if repository is in an organization"
+        echo "- Contact organization admin"
+        echo "- Consider using personal repository for testing"
+
+    - name: ❌ Fail if No Secrets Available
+      if: env.AWS_ACCESS_KEY_ID == '' && env.GROQ_API_KEY == ''
+      run: |
+        echo "❌ WORKFLOW FAILED: No secrets are accessible"
+        echo ""
+        echo "This workflow will fail until secrets are properly configured."
+        echo "Follow the fix instructions above to resolve the issue."
+        exit 1
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
