@@ -12,16 +12,28 @@ DOCKER_IMAGE="fluxtrader:latest"
 CONTAINER_NAME="fluxtrader-app"
 APP_PORT="8000"
 
-# Update system and install dependencies
+# Detect OS and install dependencies
 echo "📦 Installing dependencies..."
-sudo yum update -y
-sudo yum install -y docker git curl
+if command -v yum &> /dev/null; then
+    # Amazon Linux / CentOS / RHEL
+    sudo yum update -y
+    sudo yum install -y docker git curl
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    sudo usermod -a -G docker $USER
+elif command -v apt &> /dev/null; then
+    # Ubuntu / Debian
+    sudo apt update -y
+    sudo apt install -y docker.io git curl
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    sudo usermod -a -G docker $USER
+else
+    echo "❌ Unsupported operating system"
+    exit 1
+fi
 
-# Start Docker
-echo "🐳 Starting Docker..."
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -a -G docker $USER
+echo "🐳 Docker installation completed..."
 
 # Clone repository
 echo "📥 Cloning repository..."
