@@ -2,6 +2,9 @@ name: Simple Secrets Test
 
 on:
   workflow_dispatch:
+  push:
+    branches: [dev]
+    paths: ['.github/workflows/simple-test.yml']
 
 permissions:
   contents: read
