@@ -166,30 +166,36 @@ class SecretsManager:
     async def get_database_credentials(self, database_name: str = "main") -> DatabaseCredentials:
         """
         Get database credentials from AWS Secrets Manager or environment variables.
-        
+
         Args:
             database_name: Name of the database configuration
-            
+
         Returns:
             DatabaseCredentials object
         """
-        # Try AWS Secrets Manager first
-        secret_name = f"database/{database_name}"
-        secret_value = await self._get_secret_value(secret_name)
-        
-        if secret_value:
-            return DatabaseCredentials(
-                host=secret_value.get("host", "localhost"),
-                port=int(secret_value.get("port", 5432)),
-                database=secret_value.get("database", "kamikaze"),
-                username=secret_value.get("username", "postgres"),
-                password=secret_value.get("password", ""),
-                ssl_mode=secret_value.get("ssl_mode", "prefer"),
-                min_size=int(secret_value.get("min_size", 5)),
-                max_size=int(secret_value.get("max_size", 20)),
-                timeout=int(secret_value.get("timeout", 60))
-            )
-        
+        # Try AWS Secrets Manager first using kmkz-secrets
+        try:
+            secret_value = await self._get_secret_value("kmkz-secrets")
+
+            if secret_value:
+                db_config = secret_value.get("database", {}).get(self.environment, {})
+
+                if db_config:
+                    logger.info(f"✅ Using database credentials from AWS Secrets Manager (kmkz-secrets/{self.environment})")
+                    return DatabaseCredentials(
+                        host=db_config.get("host", "localhost"),
+                        port=int(db_config.get("port", 5432)),
+                        database=db_config.get("database", "kamikaze"),
+                        username=db_config.get("username", "postgres"),
+                        password=db_config.get("password", ""),
+                        ssl_mode=db_config.get("ssl_mode", "prefer"),
+                        min_size=int(db_config.get("min_size", 5)),
+                        max_size=int(db_config.get("max_size", 20)),
+                        timeout=int(db_config.get("timeout", 60))
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to get database credentials from kmkz-secrets: {e}")
+
         # Fallback to environment variables
         logger.info("📝 Using database credentials from environment variables")
         return DatabaseCredentials(
@@ -207,22 +213,29 @@ class SecretsManager:
     async def get_trading_api_keys(self) -> TradingAPIKeys:
         """
         Get trading API keys from AWS Secrets Manager or environment variables.
-        
+
         Returns:
             TradingAPIKeys object
         """
-        # Try AWS Secrets Manager first
-        secret_value = await self._get_secret_value("trading/api-keys")
-        
-        if secret_value:
-            return TradingAPIKeys(
-                binance_api_key=secret_value.get("binance_api_key"),
-                binance_secret_key=secret_value.get("binance_secret_key"),
-                binance_testnet=secret_value.get("binance_testnet", True),
-                groq_api_key=secret_value.get("groq_api_key"),
-                openai_api_key=secret_value.get("openai_api_key")
-            )
-        
+        # Try AWS Secrets Manager first using kmkz-secrets
+        try:
+            secret_value = await self._get_secret_value("kmkz-secrets")
+
+            if secret_value:
+                trading_config = secret_value.get("trading", {}).get(self.environment, {})
+
+                if trading_config:
+                    logger.info(f"✅ Using trading API keys from AWS Secrets Manager (kmkz-secrets/{self.environment})")
+                    return TradingAPIKeys(
+                        binance_api_key=trading_config.get("binance_api_key"),
+                        binance_secret_key=trading_config.get("binance_secret_key"),
+                        binance_testnet=trading_config.get("binance_testnet", True),
+                        groq_api_key=trading_config.get("groq_api_key"),
+                        openai_api_key=trading_config.get("openai_api_key")
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to get trading API keys from kmkz-secrets: {e}")
+
         # Fallback to environment variables
         logger.info("📝 Using trading API keys from environment variables")
         return TradingAPIKeys(
@@ -236,21 +249,28 @@ class SecretsManager:
     async def get_application_secrets(self) -> ApplicationSecrets:
         """
         Get application secrets from AWS Secrets Manager or environment variables.
-        
+
         Returns:
             ApplicationSecrets object
         """
-        # Try AWS Secrets Manager first
-        secret_value = await self._get_secret_value("application/secrets")
-        
-        if secret_value:
-            return ApplicationSecrets(
-                jwt_secret=secret_value.get("jwt_secret", "default-jwt-secret-change-me"),
-                encryption_key=secret_value.get("encryption_key", "default-encryption-key"),
-                credentials_encryption_key=secret_value.get("credentials_encryption_key", ""),
-                webhook_secret=secret_value.get("webhook_secret")
-            )
-        
+        # Try AWS Secrets Manager first using kmkz-secrets
+        try:
+            secret_value = await self._get_secret_value("kmkz-secrets")
+
+            if secret_value:
+                app_config = secret_value.get("application", {}).get(self.environment, {})
+
+                if app_config:
+                    logger.info(f"✅ Using application secrets from AWS Secrets Manager (kmkz-secrets/{self.environment})")
+                    return ApplicationSecrets(
+                        jwt_secret=app_config.get("jwt_secret", "default-jwt-secret-change-me"),
+                        encryption_key=app_config.get("encryption_key", "default-encryption-key"),
+                        credentials_encryption_key=app_config.get("credentials_encryption_key", ""),
+                        webhook_secret=app_config.get("webhook_secret")
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to get application secrets from kmkz-secrets: {e}")
+
         # Fallback to environment variables
         logger.info("📝 Using application secrets from environment variables")
         return ApplicationSecrets(

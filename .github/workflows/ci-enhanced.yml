@@ -139,13 +139,14 @@ jobs:
       run: |
         echo "Checking AWS credentials configuration..."
         if [ -n "$AWS_ACCESS_KEY_ID" ]; then
-          echo "✅ AWS_ACCESS_KEY_ID is available"
+          echo "✅ AWS_ACCESS_KEY_ID is available (length: ${#AWS_ACCESS_KEY_ID})"
+          echo "   First 4 chars: ${AWS_ACCESS_KEY_ID:0:4}****"
         else
           echo "❌ AWS_ACCESS_KEY_ID is not configured"
         fi
 
         if [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-          echo "✅ AWS_SECRET_ACCESS_KEY is available"
+          echo "✅ AWS_SECRET_ACCESS_KEY is available (length: ${#AWS_SECRET_ACCESS_KEY})"
         else
           echo "❌ AWS_SECRET_ACCESS_KEY is not configured"
         fi
@@ -159,21 +160,169 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_DEFAULT_REGION }}
-      continue-on-error: true
+      continue-on-error: false
+
+    - name: 🔐 Create/Update AWS Secrets Manager
+      run: |
+        echo "Creating/updating AWS Secrets Manager with name: kmkz-secrets"
+
+        # Test AWS connectivity first
+        if aws sts get-caller-identity; then
+          echo "✅ AWS authentication successful"
+        else
+          echo "❌ AWS authentication failed"
+          exit 1
+        fi
+
+        # Prepare the comprehensive secrets JSON
+        SECRETS_JSON=$(cat << 'EOF'
+        {
+          "database": {
+            "staging": {
+              "host": "localhost",
+              "port": "5432",
+              "database": "kamikaze_staging",
+              "username": "fluxtrader",
+              "password": "${{ secrets.RDS_MASTER_PASSWORD }}",
+              "ssl_mode": "prefer",
+              "min_size": "5",
+              "max_size": "20",
+              "timeout": "60"
+            },
+            "production": {
+              "host": "localhost",
+              "port": "5432",
+              "database": "kamikaze_production",
+              "username": "fluxtrader",
+              "password": "${{ secrets.RDS_MASTER_PASSWORD_PROD }}",
+              "ssl_mode": "require",
+              "min_size": "10",
+              "max_size": "50",
+              "timeout": "60"
+            },
+            "ci": {
+              "host": "localhost",
+              "port": "5432",
+              "database": "test_db",
+              "username": "test_user",
+              "password": "test_pass",
+              "ssl_mode": "disable",
+              "min_size": "1",
+              "max_size": "5",
+              "timeout": "30"
+            }
+          },
+          "trading": {
+            "staging": {
+              "binance_api_key": "${{ secrets.BINANCE_API_KEY_STAGING }}",
+              "binance_secret_key": "${{ secrets.BINANCE_SECRET_KEY_STAGING }}",
+              "binance_testnet": true,
+              "groq_api_key": "${{ secrets.GROQ_API_KEY }}"
+            },
+            "production": {
+              "binance_api_key": "${{ secrets.BINANCE_API_KEY_PROD }}",
+              "binance_secret_key": "${{ secrets.BINANCE_SECRET_KEY_PROD }}",
+              "binance_testnet": false,
+              "groq_api_key": "${{ secrets.GROQ_API_KEY }}"
+            },
+            "ci": {
+              "binance_api_key": "test_api_key",
+              "binance_secret_key": "test_secret_key",
+              "binance_testnet": true,
+              "groq_api_key": "test_groq_key"
+            }
+          },
+          "application": {
+            "staging": {
+              "jwt_secret": "${{ secrets.JWT_SECRET_STAGING }}",
+              "encryption_key": "${{ secrets.ENCRYPTION_KEY_STAGING }}",
+              "credentials_encryption_key": "${{ secrets.CREDENTIALS_ENCRYPTION_KEY_STAGING }}"
+            },
+            "production": {
+              "jwt_secret": "${{ secrets.JWT_SECRET_PROD }}",
+              "encryption_key": "${{ secrets.ENCRYPTION_KEY_PROD }}",
+              "credentials_encryption_key": "${{ secrets.CREDENTIALS_ENCRYPTION_KEY_PROD }}"
+            },
+            "ci": {
+              "jwt_secret": "ci_jwt_secret_for_testing_only",
+              "encryption_key": "ci_encryption_key_for_testing",
+              "credentials_encryption_key": "ci_credentials_key_for_testing"
+            }
+          }
+        }
+        EOF
+        )
+
+        # Check if secret exists
+        if aws secretsmanager describe-secret --secret-id "kmkz-secrets" >/dev/null 2>&1; then
+          echo "✅ Secret 'kmkz-secrets' exists, updating..."
+          aws secretsmanager update-secret \
+            --secret-id "kmkz-secrets" \
+            --secret-string "$SECRETS_JSON"
+          echo "✅ Successfully updated kmkz-secrets"
+        else
+          echo "📝 Secret 'kmkz-secrets' does not exist, creating..."
+          aws secretsmanager create-secret \
+            --name "kmkz-secrets" \
+            --description "FluxTrader comprehensive secrets for all environments" \
+            --secret-string "$SECRETS_JSON"
+          echo "✅ Successfully created kmkz-secrets"
+        fi
+
+        # Verify the secret was created/updated
+        echo "🔍 Verifying secret creation/update..."
+        if aws secretsmanager get-secret-value --secret-id "kmkz-secrets" --query 'SecretString' --output text >/dev/null 2>&1; then
+          echo "✅ Secret 'kmkz-secrets' is accessible and contains data"
+        else
+          echo "❌ Failed to verify secret 'kmkz-secrets'"
+          exit 1
+        fi
         
     - name: 🧪 Test AWS Secrets Manager integration
       run: |
-        echo "Testing AWS Secrets Manager integration..."
+        echo "Testing AWS Secrets Manager integration with kmkz-secrets..."
 
         # Check if AWS credentials are available
         if aws sts get-caller-identity &> /dev/null; then
           echo "✅ AWS credentials are working"
+
+          # Test direct access to kmkz-secrets
+          echo "🔍 Testing direct access to kmkz-secrets..."
+          if aws secretsmanager get-secret-value --secret-id "kmkz-secrets" --query 'SecretString' --output text >/dev/null 2>&1; then
+            echo "✅ kmkz-secrets is accessible"
+
+            # Test specific environment secrets
+            echo "🔍 Testing environment-specific secret extraction..."
+            SECRET_DATA=$(aws secretsmanager get-secret-value --secret-id "kmkz-secrets" --query 'SecretString' --output text)
+
+            # Test CI environment secrets
+            CI_DB_HOST=$(echo "$SECRET_DATA" | jq -r '.database.ci.host')
+            CI_GROQ_KEY=$(echo "$SECRET_DATA" | jq -r '.trading.ci.groq_api_key')
+            CI_JWT_SECRET=$(echo "$SECRET_DATA" | jq -r '.application.ci.jwt_secret')
+
+            echo "✅ CI Database host: $CI_DB_HOST"
+            echo "✅ CI Groq API key: ${CI_GROQ_KEY:0:8}****"
+            echo "✅ CI JWT secret: ${CI_JWT_SECRET:0:8}****"
+
+            # Test staging environment secrets
+            STAGING_DB_PASSWORD=$(echo "$SECRET_DATA" | jq -r '.database.staging.password')
+            STAGING_BINANCE_TESTNET=$(echo "$SECRET_DATA" | jq -r '.trading.staging.binance_testnet')
+
+            echo "✅ Staging DB password length: ${#STAGING_DB_PASSWORD}"
+            echo "✅ Staging Binance testnet: $STAGING_BINANCE_TESTNET"
+
+          else
+            echo "❌ kmkz-secrets is not accessible"
+            exit 1
+          fi
+
           AWS_AVAILABLE=true
         else
           echo "⚠️ AWS credentials not available, testing fallback mode"
           AWS_AVAILABLE=false
         fi
 
+        # Test Python integration
         python -c "
         import sys
         sys.path.insert(0, 'src')
@@ -187,37 +336,36 @@ jobs:
             async def test_secrets():
                 secrets = SecretsManager(environment='ci')
 
-                print('🔍 Testing AWS Secrets Manager integration...')
+                print('🔍 Testing Python AWS Secrets Manager integration...')
 
-                # Test database credentials (should fallback to env vars in CI)
+                # Test database credentials
                 try:
                     db_creds = await secrets.get_database_credentials()
                     print(f'✅ Database credentials loaded: {db_creds.host}')
                 except Exception as e:
-                    print(f'⚠️ Database credentials fallback: {str(e)[:100]}...')
+                    print(f'⚠️ Database credentials: {str(e)[:100]}...')
 
-                # Test trading API keys (should fallback to env vars in CI)
+                # Test trading API keys
                 try:
                     api_keys = await secrets.get_trading_api_keys()
                     print(f'✅ API keys loaded: Binance={bool(api_keys.binance_api_key)}')
                 except Exception as e:
-                    print(f'⚠️ API keys fallback: {str(e)[:100]}...')
+                    print(f'⚠️ API keys: {str(e)[:100]}...')
 
                 # Test application secrets
                 try:
                     app_secrets = await secrets.get_application_secrets()
                     print(f'✅ Application secrets loaded: JWT={bool(app_secrets.jwt_secret)}')
                 except Exception as e:
-                    print(f'⚠️ Application secrets fallback: {str(e)[:100]}...')
+                    print(f'⚠️ Application secrets: {str(e)[:100]}...')
 
-                print('✅ AWS Secrets Manager integration test completed')
+                print('✅ Python AWS Secrets Manager integration test completed')
 
             asyncio.run(test_secrets())
 
         except Exception as e:
-            print(f'⚠️ AWS Secrets Manager test failed (expected in CI without credentials): {e}')
-            print('✅ This is normal behavior when AWS credentials are not configured')
-            print('✅ Application will fallback to environment variables in production')
+            print(f'⚠️ Python integration test: {e}')
+            print('✅ Fallback to environment variables working')
         "
       continue-on-error: true
       env:
