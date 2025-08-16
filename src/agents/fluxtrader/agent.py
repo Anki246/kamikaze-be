@@ -1009,7 +1009,7 @@ class FluxTraderAgent(BaseAgent):
             mcp_btc_correlation = (
                 correlation_data.get("btc_correlation", "UNKNOWN")
                 if correlation_data.get("success")
-                else correlation_strength
+                else "UNKNOWN"
             )
 
             # Extract market sentiment level

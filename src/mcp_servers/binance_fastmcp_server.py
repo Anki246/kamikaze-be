@@ -106,7 +106,6 @@ cache_ttl = 30  # seconds
 
 async def set_user_credentials(user_id: int) -> bool:
     """Set user credentials from database for the current session."""
-    global current_user_credentials
 
     try:
         # Ensure database connection
@@ -895,7 +894,7 @@ async def get_server_status() -> Dict[str, Any]:
             "features": {
                 "talib_available": TALIB_AVAILABLE,
                 "websocket_available": WEBSOCKET_AVAILABLE,
-                "binance_configured": bool(BINANCE_API_KEY and BINANCE_SECRET_KEY),
+                "binance_configured": bool(current_user_credentials.get("api_key") and current_user_credentials.get("secret_key")),
             },
             "statistics": {
                 "active_streams": len(active_streams),
