@@ -429,9 +429,11 @@ class OrderManager:
         try:
             # Publish order event
             await publish_order_event(
-                event_type=EventType.ORDER_FILLED
-                if order.status == OrderStatus.FILLED
-                else EventType.ORDER_CREATED,
+                event_type=(
+                    EventType.ORDER_FILLED
+                    if order.status == OrderStatus.FILLED
+                    else EventType.ORDER_CREATED
+                ),
                 order_id=order.order_id,
                 symbol=order.symbol,
                 side=order.side,
