@@ -39,4 +39,15 @@ Using existing production environment secrets:
 Monitor progress at: https://github.com/Anki246/kamikaze-be/actions
 
 ## Status
-🚀 **PIPELINE TRIGGERED** - 2025-08-16 11:42:17 UTC
+🔧 **AWS CREDENTIALS FIXED** - 2025-08-16 13:15:00 UTC
+
+## AWS Credentials Update
+- ✅ AWS_ACCESS_KEY_ID added to GitHub secrets
+- ✅ AWS_SECRET_ACCESS_KEY added to GitHub secrets
+- ✅ Using ankita IAM user credentials
+- ✅ Ready to re-trigger pipeline with working AWS integration
+
+## Expected Fix
+- AWS Secrets Manager integration should now pass
+- Infrastructure deployment should work correctly
+- Application deployment to staging should succeed
