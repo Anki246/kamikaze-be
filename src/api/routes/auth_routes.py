@@ -4,16 +4,18 @@ Provides REST API endpoints for user authentication and session management
 """
 
 import hashlib
+import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
-import logging
+
 import jwt
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
-from fastapi import APIRouter, HTTPException, Depends, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
+
 from ...infrastructure.auth_database import auth_db
 
 # Setup logging
@@ -39,6 +41,7 @@ JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
+
 # Pydantic models
 class SignUpRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=255)
@@ -46,9 +49,11 @@ class SignUpRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=100)
     username: Optional[str] = Field(None, min_length=3, max_length=50)
 
+
 class SignInRequest(BaseModel):
     email: EmailStr
     password: str
+
 
 class AuthResponse(BaseModel):
     success: bool
@@ -58,8 +63,10 @@ class AuthResponse(BaseModel):
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
 
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
 
 # Utility functions
 def hash_password(password: str) -> str:
@@ -68,13 +75,15 @@ def hash_password(password: str) -> str:
     password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
     return f"{salt}:{password_hash}"
 
+
 def verify_password(password: str, hashed_password: str) -> bool:
     """Verify password against hash."""
     try:
-        salt, password_hash = hashed_password.split(':')
+        salt, password_hash = hashed_password.split(":")
         return hashlib.sha256((password + salt).encode()).hexdigest() == password_hash
     except ValueError:
         return False
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create JWT access token."""
@@ -82,11 +91,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        )
+
     to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
     return encoded_jwt
+
 
 def create_refresh_token(data: dict):
     """Create JWT refresh token."""
@@ -95,6 +107,7 @@ def create_refresh_token(data: dict):
     to_encode.update({"exp": expire, "type": "refresh"})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
     return encoded_jwt
+
 
 def verify_token(token: str) -> Optional[Dict]:
     """Verify and decode JWT token."""
@@ -106,13 +119,18 @@ def verify_token(token: str) -> Optional[Dict]:
     except InvalidTokenError:
         return None
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
     """Get current authenticated user."""
     try:
         # Ensure database connection
         if not await auth_db.ensure_connected():
             logger.error("Database connection failed in get_current_user")
-            raise HTTPException(status_code=503, detail="Database service not available")
+            raise HTTPException(
+                status_code=503, detail="Database service not available"
+            )
 
         token = credentials.credentials
         logger.debug(f"Verifying token for authentication: {token[:20]}...")
@@ -150,22 +168,24 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         logger.error(f"Unexpected error in get_current_user: {e}")
         raise HTTPException(status_code=401, detail="Authentication failed")
 
+
 @router.post("/signup", response_model=AuthResponse)
 async def sign_up(request: SignUpRequest, req: Request):
     """Register a new user."""
     try:
         # Ensure database connection
         if not await auth_db.ensure_connected():
-            raise HTTPException(status_code=503, detail="Database service not available")
+            raise HTTPException(
+                status_code=503, detail="Database service not available"
+            )
 
         # Check if user already exists
-        username = request.username or request.email.split('@')[0]
+        username = request.username or request.email.split("@")[0]
         existing_user = await auth_db.get_user_by_email(request.email)
 
         if existing_user:
             return AuthResponse(
-                success=False,
-                message="User with this email already exists"
+                success=False, message="User with this email already exists"
             )
 
         # Hash password
@@ -189,24 +209,21 @@ async def sign_up(request: SignUpRequest, req: Request):
             "risk_tolerance": "medium",
             "timezone": "UTC",
             "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "updated_at": datetime.utcnow(),
         }
 
         new_user = await auth_db.create_user(user_data)
 
         if not new_user:
             logger.error("Failed to create user in database")
-            return AuthResponse(
-                success=False,
-                message="Failed to create user account"
-            )
+            return AuthResponse(success=False, message="Failed to create user account")
 
         user_id = new_user["id"]
-        
+
         # Create tokens
         access_token = create_access_token(data={"sub": str(user_id)})
         refresh_token = create_refresh_token(data={"sub": str(user_id)})
-        
+
         # Create session record
         session_data = {
             "session_id": str(uuid.uuid4()),
@@ -222,30 +239,32 @@ async def sign_up(request: SignUpRequest, req: Request):
             "is_revoked": False,
             "created_at": datetime.utcnow(),
             "last_activity": datetime.utcnow(),
-            "expires_at": datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+            "expires_at": datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         }
 
         session_created = await auth_db.create_session(session_data)
         if not session_created:
-            logger.warning("Failed to create session, but user was created successfully")
-        
+            logger.warning(
+                "Failed to create session, but user was created successfully"
+            )
+
         # Remove sensitive data from response
         new_user.pop("hashed_password", None)
-        
+
         return AuthResponse(
             success=True,
             message="Account created successfully",
             user=new_user,
             access_token=access_token,
-            refresh_token=refresh_token
+            refresh_token=refresh_token,
         )
-        
+
     except Exception as e:
         logger.error(f"Signup error: {e}")
         return AuthResponse(
-            success=False,
-            message="An error occurred during registration"
+            success=False, message="An error occurred during registration"
         )
+
 
 @router.post("/signin", response_model=AuthResponse)
 async def sign_in(request: SignInRequest, req: Request):
@@ -253,7 +272,9 @@ async def sign_in(request: SignInRequest, req: Request):
     try:
         # Ensure database connection
         if not await auth_db.ensure_connected():
-            raise HTTPException(status_code=503, detail="Database service not available")
+            raise HTTPException(
+                status_code=503, detail="Database service not available"
+            )
 
         # Get user by email
         logger.info(f"Looking up user with email: {request.email}")
@@ -261,25 +282,21 @@ async def sign_in(request: SignInRequest, req: Request):
 
         if not user:
             logger.warning(f"No user found with email: {request.email}")
-            return AuthResponse(
-                success=False,
-                message="Invalid email or password"
-            )
+            return AuthResponse(success=False, message="Invalid email or password")
 
         # Verify password
         stored_password = user.get("hashed_password")
-        logger.info(f"Verifying password for user {user.get('id')}, stored password length: {len(stored_password) if stored_password else 0}")
+        logger.info(
+            f"Verifying password for user {user.get('id')}, stored password length: {len(stored_password) if stored_password else 0}"
+        )
 
         password_valid = verify_password(request.password, stored_password)
         logger.info(f"Password verification result: {password_valid}")
 
         if not password_valid:
             logger.warning(f"Password verification failed for user: {request.email}")
-            return AuthResponse(
-                success=False,
-                message="Invalid email or password"
-            )
-        
+            return AuthResponse(success=False, message="Invalid email or password")
+
         user_id = user["id"]
 
         # Update last login
@@ -304,30 +321,29 @@ async def sign_in(request: SignInRequest, req: Request):
             "is_revoked": False,
             "created_at": datetime.now(timezone.utc),
             "last_activity": datetime.now(timezone.utc),
-            "expires_at": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+            "expires_at": datetime.now(timezone.utc)
+            + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         }
 
         session_created = await auth_db.create_session(session_data)
         if not session_created:
             logger.warning("Failed to create session, but login was successful")
-        
+
         # Remove sensitive data from response
         user.pop("hashed_password", None)
-        
+
         return AuthResponse(
             success=True,
             message="Login successful",
             user=user,
             access_token=access_token,
-            refresh_token=refresh_token
+            refresh_token=refresh_token,
         )
-        
+
     except Exception as e:
         logger.error(f"Signin error: {e}")
-        return AuthResponse(
-            success=False,
-            message="An error occurred during login"
-        )
+        return AuthResponse(success=False, message="An error occurred during login")
+
 
 @router.post("/refresh", response_model=AuthResponse)
 async def refresh_token(request: RefreshTokenRequest):
@@ -342,24 +358,17 @@ async def refresh_token(request: RefreshTokenRequest):
 
         if not payload or payload.get("type") != "refresh":
             return AuthResponse(
-                success=False,
-                message="Invalid or expired refresh token"
+                success=False, message="Invalid or expired refresh token"
             )
 
         user_id = payload.get("sub")
         if not user_id:
-            return AuthResponse(
-                success=False,
-                message="Invalid token payload"
-            )
+            return AuthResponse(success=False, message="Invalid token payload")
 
         # Get user from database
         user = await auth_db.get_user_by_id(int(user_id))
         if not user or not user.get("is_active", True):
-            return AuthResponse(
-                success=False,
-                message="User not found or inactive"
-            )
+            return AuthResponse(success=False, message="User not found or inactive")
 
         # Create new access token
         new_access_token = create_access_token(data={"sub": str(user_id)})
@@ -372,18 +381,19 @@ async def refresh_token(request: RefreshTokenRequest):
             message="Token refreshed successfully",
             user=user,
             access_token=new_access_token,
-            refresh_token=request.refresh_token
+            refresh_token=request.refresh_token,
         )
 
     except Exception as e:
         logger.error(f"Token refresh error: {e}")
-        return AuthResponse(
-            success=False,
-            message="Failed to refresh token"
-        )
+        return AuthResponse(success=False, message="Failed to refresh token")
+
 
 @router.post("/logout")
-async def logout(current_user: Dict = Depends(get_current_user), credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def logout(
+    current_user: Dict = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
     """Logout user and revoke session."""
     if not database_client:
         raise HTTPException(status_code=503, detail="Database service not available")
@@ -393,37 +403,33 @@ async def logout(current_user: Dict = Depends(get_current_user), credentials: HT
         user_id = current_user["id"]
 
         # Revoke all active sessions for this user with this access token
-        await database_client.call_tool("update_record", {
-            "table_name": "user_sessions",
-            "data": {
-                "is_active": False,
-                "is_revoked": True,
-                "revoked_reason": "user_logout",
-                "revoked_at": datetime.utcnow()
+        await database_client.call_tool(
+            "update_record",
+            {
+                "table_name": "user_sessions",
+                "data": {
+                    "is_active": False,
+                    "is_revoked": True,
+                    "revoked_reason": "user_logout",
+                    "revoked_at": datetime.utcnow(),
+                },
+                "where_clause": "user_id = $1 AND access_token = $2",
+                "where_params": [user_id, access_token],
             },
-            "where_clause": "user_id = $1 AND access_token = $2",
-            "where_params": [user_id, access_token]
-        })
+        )
 
-        return {
-            "success": True,
-            "message": "Logged out successfully"
-        }
+        return {"success": True, "message": "Logged out successfully"}
 
     except Exception as e:
         logger.error(f"Logout error: {e}")
-        return {
-            "success": False,
-            "message": "Failed to logout"
-        }
+        return {"success": False, "message": "Failed to logout"}
+
 
 @router.get("/me")
 async def get_current_user_info(current_user: Dict = Depends(get_current_user)):
     """Get current authenticated user information."""
-    return {
-        "success": True,
-        "user": current_user
-    }
+    return {"success": True, "user": current_user}
+
 
 @router.get("/sessions")
 async def get_user_sessions(current_user: Dict = Depends(get_current_user)):
@@ -442,34 +448,25 @@ async def get_user_sessions(current_user: Dict = Depends(get_current_user)):
             ORDER BY last_activity DESC
         """
 
-        result = await database_client.call_tool("execute_select_query", {
-            "query": query,
-            "params": [user_id],
-            "limit": 50
-        })
+        result = await database_client.call_tool(
+            "execute_select_query", {"query": query, "params": [user_id], "limit": 50}
+        )
 
         if result.get("success"):
             sessions = result.get("data", {}).get("results", [])
-            return {
-                "success": True,
-                "sessions": sessions,
-                "count": len(sessions)
-            }
+            return {"success": True, "sessions": sessions, "count": len(sessions)}
         else:
-            return {
-                "success": False,
-                "message": "Failed to retrieve sessions"
-            }
+            return {"success": False, "message": "Failed to retrieve sessions"}
 
     except Exception as e:
         logger.error(f"Get sessions error: {e}")
-        return {
-            "success": False,
-            "message": "Failed to retrieve sessions"
-        }
+        return {"success": False, "message": "Failed to retrieve sessions"}
+
 
 @router.delete("/sessions/{session_id}")
-async def revoke_session(session_id: str, current_user: Dict = Depends(get_current_user)):
+async def revoke_session(
+    session_id: str, current_user: Dict = Depends(get_current_user)
+):
     """Revoke a specific session."""
     if not database_client:
         raise HTTPException(status_code=503, detail="Database service not available")
@@ -478,26 +475,23 @@ async def revoke_session(session_id: str, current_user: Dict = Depends(get_curre
         user_id = current_user["id"]
 
         # Revoke the specific session
-        result = await database_client.call_tool("update_record", {
-            "table_name": "user_sessions",
-            "data": {
-                "is_active": False,
-                "is_revoked": True,
-                "revoked_reason": "user_revoked",
-                "revoked_at": datetime.utcnow()
+        result = await database_client.call_tool(
+            "update_record",
+            {
+                "table_name": "user_sessions",
+                "data": {
+                    "is_active": False,
+                    "is_revoked": True,
+                    "revoked_reason": "user_revoked",
+                    "revoked_at": datetime.utcnow(),
+                },
+                "where_clause": "user_id = $1 AND session_id = $2",
+                "where_params": [user_id, session_id],
             },
-            "where_clause": "user_id = $1 AND session_id = $2",
-            "where_params": [user_id, session_id]
-        })
+        )
 
-        return {
-            "success": True,
-            "message": "Session revoked successfully"
-        }
+        return {"success": True, "message": "Session revoked successfully"}
 
     except Exception as e:
         logger.error(f"Revoke session error: {e}")
-        return {
-            "success": False,
-            "message": "Failed to revoke session"
-        }
+        return {"success": False, "message": "Failed to revoke session"}

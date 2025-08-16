@@ -4,36 +4,39 @@ Provides reliable, high-performance database operations for authentication syste
 """
 
 import asyncio
-import asyncpg
 import logging
-from typing import Optional, Dict, List, Any
 from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional
+
+import asyncpg
+
 from .database_config import db_config
 
 logger = logging.getLogger(__name__)
+
 
 class AuthDatabase:
     """
     Direct PostgreSQL connection manager specifically for authentication operations.
     Provides reliable, high-performance database access without FastMCP overhead.
     """
-    
+
     def __init__(self):
         self.pool: Optional[asyncpg.Pool] = None
         self.connected = False
         self._connection_lock = asyncio.Lock()
-    
+
     async def connect(self) -> bool:
         """Establish connection pool to PostgreSQL database."""
         async with self._connection_lock:
             if self.connected and self.pool:
                 return True
-            
+
             try:
                 # Close existing pool if any
                 if self.pool:
                     await self.pool.close()
-                
+
                 # Create connection pool with optimized settings for auth
                 self.pool = await asyncpg.create_pool(
                     host=db_config.host,
@@ -46,25 +49,25 @@ class AuthDatabase:
                     max_size=10,  # Reasonable max for auth load
                     command_timeout=10,  # Shorter timeout for auth operations
                     server_settings={
-                        'application_name': 'kamikaze_auth',
-                        'search_path': 'public'
-                    }
+                        "application_name": "kamikaze_auth",
+                        "search_path": "public",
+                    },
                 )
-                
+
                 # Test connection
                 async with self.pool.acquire() as conn:
                     await conn.fetchval("SELECT 1")
-                
+
                 self.connected = True
                 logger.info(f"✅ Auth database connected: {db_config.database}")
                 return True
-                
+
             except Exception as e:
                 logger.error(f"❌ Failed to connect auth database: {e}")
                 self.connected = False
                 self.pool = None
                 return False
-    
+
     async def disconnect(self):
         """Close connection pool."""
         async with self._connection_lock:
@@ -73,12 +76,12 @@ class AuthDatabase:
                 self.pool = None
             self.connected = False
             logger.info("🔌 Auth database disconnected")
-    
+
     async def ensure_connected(self) -> bool:
         """Ensure database connection is available."""
         if not self.connected or not self.pool:
             return await self.connect()
-        
+
         try:
             # Quick connection test
             async with self.pool.acquire() as conn:
@@ -88,20 +91,20 @@ class AuthDatabase:
             logger.warning(f"Auth DB connection test failed, reconnecting: {e}")
             self.connected = False
             return await self.connect()
-    
+
     @asynccontextmanager
     async def get_connection(self):
         """Get a database connection from the pool."""
         if not await self.ensure_connected():
             raise ConnectionError("Failed to establish database connection")
-        
+
         async with self.pool.acquire() as conn:
             yield conn
-    
+
     # ============================================================================
     # User Management Operations
     # ============================================================================
-    
+
     async def create_user(self, user_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Create a new user in the database."""
         try:
@@ -117,7 +120,7 @@ class AuthDatabase:
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
                     ) RETURNING *
                 """
-                
+
                 result = await conn.fetchrow(
                     query,
                     user_data["uuid"],
@@ -133,15 +136,15 @@ class AuthDatabase:
                     user_data["risk_tolerance"],
                     user_data["timezone"],
                     user_data["created_at"],
-                    user_data["updated_at"]
+                    user_data["updated_at"],
                 )
-                
+
                 return dict(result) if result else None
-                
+
         except Exception as e:
             logger.error(f"Failed to create user: {e}")
             return None
-    
+
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get user by email address."""
         try:
@@ -149,11 +152,11 @@ class AuthDatabase:
                 query = "SELECT * FROM users WHERE email = $1 AND is_active = true"
                 result = await conn.fetchrow(query, email)
                 return dict(result) if result else None
-                
+
         except Exception as e:
             logger.error(f"Failed to get user by email: {e}")
             return None
-    
+
     async def get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Get user by ID."""
         try:
@@ -161,11 +164,11 @@ class AuthDatabase:
                 query = "SELECT * FROM users WHERE id = $1 AND is_active = true"
                 result = await conn.fetchrow(query, user_id)
                 return dict(result) if result else None
-                
+
         except Exception as e:
             logger.error(f"Failed to get user by ID: {e}")
             return None
-    
+
     async def update_user_login(self, user_id: int, last_login: Any) -> bool:
         """Update user's last login timestamp."""
         try:
@@ -173,15 +176,15 @@ class AuthDatabase:
                 query = "UPDATE users SET last_login = $1 WHERE id = $2"
                 await conn.execute(query, last_login, user_id)
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to update user login: {e}")
             return False
-    
+
     # ============================================================================
     # Session Management Operations
     # ============================================================================
-    
+
     async def create_session(self, session_data: Dict[str, Any]) -> bool:
         """Create a new user session."""
         try:
@@ -196,7 +199,7 @@ class AuthDatabase:
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
                     )
                 """
-                
+
                 await conn.execute(
                     query,
                     session_data["session_id"],
@@ -212,15 +215,17 @@ class AuthDatabase:
                     session_data["is_revoked"],
                     session_data["created_at"],
                     session_data["last_activity"],
-                    session_data["expires_at"]
+                    session_data["expires_at"],
                 )
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to create session: {e}")
             return False
-    
-    async def get_session_by_token(self, refresh_token: str) -> Optional[Dict[str, Any]]:
+
+    async def get_session_by_token(
+        self, refresh_token: str
+    ) -> Optional[Dict[str, Any]]:
         """Get session by refresh token."""
         try:
             async with self.get_connection() as conn:
@@ -230,11 +235,11 @@ class AuthDatabase:
                 """
                 result = await conn.fetchrow(query, refresh_token)
                 return dict(result) if result else None
-                
+
         except Exception as e:
             logger.error(f"Failed to get session by token: {e}")
             return None
-    
+
     async def get_user_sessions(self, user_id: int) -> List[Dict[str, Any]]:
         """Get all active sessions for a user."""
         try:
@@ -248,11 +253,11 @@ class AuthDatabase:
                 """
                 results = await conn.fetch(query, user_id)
                 return [dict(row) for row in results]
-                
+
         except Exception as e:
             logger.error(f"Failed to get user sessions: {e}")
             return []
-    
+
     async def update_session(self, session_id: str, updates: Dict[str, Any]) -> bool:
         """Update session data."""
         try:
@@ -261,28 +266,30 @@ class AuthDatabase:
                 set_clauses = []
                 values = []
                 param_count = 1
-                
+
                 for key, value in updates.items():
                     set_clauses.append(f"{key} = ${param_count}")
                     values.append(value)
                     param_count += 1
-                
+
                 values.append(session_id)  # For WHERE clause
-                
+
                 query = f"""
                     UPDATE user_sessions 
                     SET {', '.join(set_clauses)}
                     WHERE session_id = ${param_count}
                 """
-                
+
                 await conn.execute(query, *values)
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to update session: {e}")
             return False
-    
-    async def revoke_session(self, session_id: str, reason: str = "user_revoked") -> bool:
+
+    async def revoke_session(
+        self, session_id: str, reason: str = "user_revoked"
+    ) -> bool:
         """Revoke a specific session."""
         try:
             async with self.get_connection() as conn:
@@ -294,12 +301,14 @@ class AuthDatabase:
                 """
                 await conn.execute(query, reason, session_id)
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to revoke session: {e}")
             return False
-    
-    async def revoke_user_sessions(self, user_id: int, reason: str = "user_logout") -> bool:
+
+    async def revoke_user_sessions(
+        self, user_id: int, reason: str = "user_logout"
+    ) -> bool:
         """Revoke all sessions for a user."""
         try:
             async with self.get_connection() as conn:
@@ -311,10 +320,11 @@ class AuthDatabase:
                 """
                 await conn.execute(query, reason, user_id)
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to revoke user sessions: {e}")
             return False
+
 
 # Global auth database instance
 auth_db = AuthDatabase()

@@ -4,11 +4,13 @@ Real Market Data API with Binance Integration
 
 import asyncio
 import logging
-import aiohttp
-from typing import Dict, List, Optional, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 logger = logging.getLogger(__name__)
+
 
 class MarketDataAPI:
     """Real market data API using Binance public endpoints."""
@@ -25,7 +27,7 @@ class MarketDataAPI:
         try:
             self.session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=30),
-                headers={'User-Agent': 'Kamikaze-Trader/1.0'}
+                headers={"User-Agent": "Kamikaze-Trader/1.0"},
             )
 
             # Test connection with server time
@@ -74,7 +76,7 @@ class MarketDataAPI:
                         "volume_24h": float(data["volume"]),
                         "quote_volume_24h": float(data["quoteVolume"]),
                         "open_price": float(data["openPrice"]),
-                        "timestamp": int(datetime.utcnow().timestamp())
+                        "timestamp": int(datetime.utcnow().timestamp()),
                     }
                 else:
                     error_data = await response.json()
@@ -88,7 +90,7 @@ class MarketDataAPI:
                         "high_24h": 0.0,
                         "low_24h": 0.0,
                         "volume_24h": 0.0,
-                        "timestamp": int(datetime.utcnow().timestamp())
+                        "timestamp": int(datetime.utcnow().timestamp()),
                     }
 
         except Exception as e:
@@ -103,7 +105,7 @@ class MarketDataAPI:
                 "high_24h": 0.0,
                 "low_24h": 0.0,
                 "volume_24h": 0.0,
-                "timestamp": int(datetime.utcnow().timestamp())
+                "timestamp": int(datetime.utcnow().timestamp()),
             }
 
     async def get_market_data(self, symbols: List[str]) -> Dict[str, Any]:
@@ -132,14 +134,14 @@ class MarketDataAPI:
                                 "volume24h": float(ticker["volume"]),
                                 "high24h": float(ticker["highPrice"]),
                                 "low24h": float(ticker["lowPrice"]),
-                                "timestamp": int(datetime.utcnow().timestamp())
+                                "timestamp": int(datetime.utcnow().timestamp()),
                             }
 
                     return {
                         "success": True,
                         "data": filtered_data,
                         "timestamp": int(datetime.utcnow().timestamp()),
-                        "source": "binance"
+                        "source": "binance",
                     }
                 else:
                     error_data = await response.json()
@@ -147,7 +149,7 @@ class MarketDataAPI:
                         "success": False,
                         "error": error_data.get("msg", "Unknown error"),
                         "data": {},
-                        "timestamp": int(datetime.utcnow().timestamp())
+                        "timestamp": int(datetime.utcnow().timestamp()),
                     }
 
         except Exception as e:
@@ -156,7 +158,7 @@ class MarketDataAPI:
                 "success": False,
                 "error": str(e),
                 "data": {},
-                "timestamp": int(datetime.utcnow().timestamp())
+                "timestamp": int(datetime.utcnow().timestamp()),
             }
 
     def get_ticker(self, symbol: str):
@@ -168,5 +170,6 @@ class MarketDataAPI:
         """Synchronous wrapper for backward compatibility."""
         # This is a legacy method, should use get_market_data instead
         return {"symbol": symbol, "data": "mock_data"}
+
 
 market_data_api = MarketDataAPI()

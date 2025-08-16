@@ -13,31 +13,36 @@ Features:
 """
 
 import asyncio
-import asyncpg
 import json
 import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import asyncpg
+# Pydantic imports for input validation
+from pydantic import BaseModel, Field
 
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
     print("✅ PostgreSQL FastMCP Server: Loaded environment variables from .env file")
 except ImportError:
-    print("⚠️ PostgreSQL FastMCP Server: python-dotenv not installed, using system environment variables only")
+    print(
+        "⚠️ PostgreSQL FastMCP Server: python-dotenv not installed, using system environment variables only"
+    )
 except Exception as e:
     print(f"⚠️ PostgreSQL FastMCP Server: Failed to load .env file: {e}")
 
-# Pydantic imports for input validation
-from pydantic import BaseModel, Field
 
 # FastMCP imports
 try:
     from fastmcp import FastMCP
+
     MCP_AVAILABLE = True
 except ImportError:
     print("⚠️  FastMCP not available - server will run in mock mode")
@@ -50,13 +55,14 @@ logger = logging.getLogger(__name__)
 # Initialize FastMCP server
 mcp = FastMCP("PostgreSQL FastMCP Server")
 
+
 # Load configuration from config.json and environment variables
 def load_database_config():
     """Load database configuration from environment variables and config.json."""
     try:
         # Load non-sensitive config from config.json
         config_path = Path(__file__).parent.parent.parent / "config.json"
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             config = json.load(f)
         db_config_file = config.get("database", {})
 
@@ -68,13 +74,23 @@ def load_database_config():
             "database": os.getenv("DB_NAME", "kamikaze"),
             "user": os.getenv("DB_USER", "postgres"),
             "password": os.getenv("DB_PASSWORD"),  # No default for security
-
             # Non-sensitive config from config.json with env override
-            "min_size": int(os.getenv("DB_MIN_SIZE", str(db_config_file.get("min_size", 5)))),
-            "max_size": int(os.getenv("DB_MAX_SIZE", str(db_config_file.get("max_size", 20)))),
-            "command_timeout": int(os.getenv("DB_TIMEOUT", str(db_config_file.get("command_timeout", 60)))),
-            "ssl": os.getenv("DB_SSL", "false").lower() == "true" or db_config_file.get("ssl", False),
-            "pool_recycle": int(os.getenv("DB_POOL_RECYCLE", str(db_config_file.get("pool_recycle", 3600))))
+            "min_size": int(
+                os.getenv("DB_MIN_SIZE", str(db_config_file.get("min_size", 5)))
+            ),
+            "max_size": int(
+                os.getenv("DB_MAX_SIZE", str(db_config_file.get("max_size", 20)))
+            ),
+            "command_timeout": int(
+                os.getenv("DB_TIMEOUT", str(db_config_file.get("command_timeout", 60)))
+            ),
+            "ssl": os.getenv("DB_SSL", "false").lower() == "true"
+            or db_config_file.get("ssl", False),
+            "pool_recycle": int(
+                os.getenv(
+                    "DB_POOL_RECYCLE", str(db_config_file.get("pool_recycle", 3600))
+                )
+            ),
         }
 
         # Validate that password is provided
@@ -82,18 +98,22 @@ def load_database_config():
             logger.error("❌ DB_PASSWORD environment variable is required but not set!")
             raise ValueError("Database password not provided in environment variables")
 
-        logger.info(f"📋 Database config loaded: {db_config['host']}:{db_config['port']}/{db_config['database']} (user: {db_config['user']})")
+        logger.info(
+            f"📋 Database config loaded: {db_config['host']}:{db_config['port']}/{db_config['database']} (user: {db_config['user']})"
+        )
         return db_config
 
     except Exception as e:
         logger.error(f"Failed to load database config: {e}")
         raise
 
+
 # Load database configuration
 DATABASE_CONFIG = load_database_config()
 
 # Global connection pool
 connection_pool: Optional[asyncpg.Pool] = None
+
 
 class PostgreSQLManager:
     """PostgreSQL database manager with connection pooling."""
@@ -126,7 +146,7 @@ class PostgreSQLManager:
                         password=DATABASE_CONFIG["password"],
                         min_size=DATABASE_CONFIG["min_size"],
                         max_size=DATABASE_CONFIG["max_size"],
-                        command_timeout=DATABASE_CONFIG["command_timeout"]
+                        command_timeout=DATABASE_CONFIG["command_timeout"],
                     )
 
                     # Test connection
@@ -134,7 +154,9 @@ class PostgreSQLManager:
                         await conn.fetchval("SELECT 1")
 
                     self.connected = True
-                    logger.info(f"✅ Connected to PostgreSQL database: {DATABASE_CONFIG['database']}")
+                    logger.info(
+                        f"✅ Connected to PostgreSQL database: {DATABASE_CONFIG['database']}"
+                    )
                     return True
 
                 except Exception as e:
@@ -145,7 +167,7 @@ class PostgreSQLManager:
         except Exception as e:
             logger.error(f"❌ Connection lock error: {e}")
             return False
-    
+
     async def disconnect(self):
         """Close connection pool."""
         try:
@@ -177,7 +199,9 @@ class PostgreSQLManager:
                 return await self.connect()
         except Exception as e:
             # Check if it's an event loop issue
-            if "Event loop is closed" in str(e) or "another operation is in progress" in str(e):
+            if "Event loop is closed" in str(
+                e
+            ) or "another operation is in progress" in str(e):
                 logger.warning(f"Connection pool issue detected: {e}")
                 # Don't try to reconnect immediately, just mark as disconnected
                 self.connected = False
@@ -187,7 +211,9 @@ class PostgreSQLManager:
                 self.connected = False
                 return await self.connect()
 
-    async def execute_query(self, query: str, params: Optional[List] = None) -> List[Dict[str, Any]]:
+    async def execute_query(
+        self, query: str, params: Optional[List] = None
+    ) -> List[Dict[str, Any]]:
         """Execute a SELECT query and return results."""
         if not await self.ensure_connected():
             raise Exception("Failed to establish database connection")
@@ -225,6 +251,7 @@ class PostgreSQLManager:
             self.connected = False
             raise
 
+
 # Initialize database manager
 db_manager = PostgreSQLManager()
 
@@ -232,33 +259,48 @@ db_manager = PostgreSQLManager()
 # Pydantic Models for Input Validation
 # ============================================================================
 
+
 class TableNameInput(BaseModel):
     """Input model for table name operations."""
+
     table_name: str = Field(description="Name of the database table")
+
 
 class QueryInput(BaseModel):
     """Input model for query execution."""
+
     query: str = Field(description="SQL query to execute")
     params: Optional[List] = Field(default=None, description="Query parameters")
     limit: int = Field(default=100, description="Maximum number of rows to return")
 
+
 class InsertRecordInput(BaseModel):
     """Input model for record insertion."""
+
     table_name: str = Field(description="Name of the database table")
     data: Dict[str, Any] = Field(description="Data to insert as key-value pairs")
 
+
 class UpdateRecordInput(BaseModel):
     """Input model for record updates."""
+
     table_name: str = Field(description="Name of the database table")
     data: Dict[str, Any] = Field(description="Data to update as key-value pairs")
     where_clause: str = Field(description="WHERE clause for the update")
-    where_params: Optional[List] = Field(default=None, description="Parameters for WHERE clause")
+    where_params: Optional[List] = Field(
+        default=None, description="Parameters for WHERE clause"
+    )
+
 
 class DeleteRecordInput(BaseModel):
     """Input model for record deletion."""
+
     table_name: str = Field(description="Name of the database table")
     where_clause: str = Field(description="WHERE clause for the deletion")
-    where_params: Optional[List] = Field(default=None, description="Parameters for WHERE clause")
+    where_params: Optional[List] = Field(
+        default=None, description="Parameters for WHERE clause"
+    )
+
 
 @mcp.tool()
 async def ping() -> Dict[str, Any]:
@@ -268,8 +310,9 @@ async def ping() -> Dict[str, Any]:
         "server": "PostgreSQL FastMCP Server",
         "timestamp": time.time(),
         "version": "1.0.0",
-        "database_connected": db_manager.connected
+        "database_connected": db_manager.connected,
     }
+
 
 @mcp.tool()
 async def get_database_health() -> Dict[str, Any]:
@@ -278,30 +321,34 @@ async def get_database_health() -> Dict[str, Any]:
         if not await db_manager.ensure_connected():
             return {
                 "success": False,
-                "error": "Failed to establish database connection"
+                "error": "Failed to establish database connection",
             }
 
         # Get database version
         version_result = await db_manager.execute_query("SELECT version()")
-        version = version_result[0]['version'] if version_result else "Unknown"
+        version = version_result[0]["version"] if version_result else "Unknown"
 
         # Get database size
         db_size_query = "SELECT pg_size_pretty(pg_database_size($1)) as size"
-        size_result = await db_manager.execute_query(db_size_query, [DATABASE_CONFIG["database"]])
-        db_size = size_result[0]['size'] if size_result else "Unknown"
+        size_result = await db_manager.execute_query(
+            db_size_query, [DATABASE_CONFIG["database"]]
+        )
+        db_size = size_result[0]["size"] if size_result else "Unknown"
 
         # Get connection count
         connection_query = """
             SELECT count(*) as count FROM pg_stat_activity
             WHERE datname = $1
         """
-        conn_result = await db_manager.execute_query(connection_query, [DATABASE_CONFIG["database"]])
-        connection_count = conn_result[0]['count'] if conn_result else 0
+        conn_result = await db_manager.execute_query(
+            connection_query, [DATABASE_CONFIG["database"]]
+        )
+        connection_count = conn_result[0]["count"] if conn_result else 0
 
         # Get uptime
         uptime_query = "SELECT now() - pg_postmaster_start_time() as uptime"
         uptime_result = await db_manager.execute_query(uptime_query)
-        uptime = str(uptime_result[0]['uptime']) if uptime_result else "Unknown"
+        uptime = str(uptime_result[0]["uptime"]) if uptime_result else "Unknown"
 
         return {
             "success": True,
@@ -313,15 +360,13 @@ async def get_database_health() -> Dict[str, Any]:
             "connections": connection_count,
             "uptime": uptime,
             "pool_size": db_manager.pool._queue.qsize() if db_manager.pool else 0,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
-        return {
-            "success": False,
-            "error": f"Health check failed: {str(e)}"
-        }
+        return {"success": False, "error": f"Health check failed: {str(e)}"}
+
 
 @mcp.tool()
 async def list_tables() -> Dict[str, Any]:
@@ -330,7 +375,7 @@ async def list_tables() -> Dict[str, Any]:
         if not await db_manager.ensure_connected():
             return {
                 "success": False,
-                "error": "Failed to establish database connection"
+                "error": "Failed to establish database connection",
             }
 
         query = """
@@ -350,15 +395,13 @@ async def list_tables() -> Dict[str, Any]:
             "success": True,
             "tables": tables,
             "count": len(tables),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Failed to list tables: {e}")
-        return {
-            "success": False,
-            "error": f"Failed to list tables: {str(e)}"
-        }
+        return {"success": False, "error": f"Failed to list tables: {str(e)}"}
+
 
 @mcp.tool()
 async def get_table_schema(input: TableNameInput) -> Dict[str, Any]:
@@ -367,7 +410,7 @@ async def get_table_schema(input: TableNameInput) -> Dict[str, Any]:
         if not await db_manager.ensure_connected():
             return {
                 "success": False,
-                "error": "Failed to establish database connection"
+                "error": "Failed to establish database connection",
             }
 
         query = """
@@ -388,25 +431,20 @@ async def get_table_schema(input: TableNameInput) -> Dict[str, Any]:
         columns = await db_manager.execute_query(query, [input.table_name])
 
         if not columns:
-            return {
-                "success": False,
-                "error": f"Table '{input.table_name}' not found"
-            }
+            return {"success": False, "error": f"Table '{input.table_name}' not found"}
 
         return {
             "success": True,
             "table_name": input.table_name,
             "columns": columns,
             "column_count": len(columns),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Failed to get table schema: {e}")
-        return {
-            "success": False,
-            "error": f"Failed to get table schema: {str(e)}"
-        }
+        return {"success": False, "error": f"Failed to get table schema: {str(e)}"}
+
 
 @mcp.tool()
 async def execute_select_query(input: QueryInput) -> Dict[str, Any]:
@@ -415,20 +453,17 @@ async def execute_select_query(input: QueryInput) -> Dict[str, Any]:
         if not await db_manager.ensure_connected():
             return {
                 "success": False,
-                "error": "Failed to establish database connection"
+                "error": "Failed to establish database connection",
             }
 
         # Safety check - only allow SELECT queries
         query_lower = input.query.lower().strip()
-        if not query_lower.startswith('select'):
-            return {
-                "success": False,
-                "error": "Only SELECT queries are allowed"
-            }
+        if not query_lower.startswith("select"):
+            return {"success": False, "error": "Only SELECT queries are allowed"}
 
         # Add limit if not present
         query = input.query
-        if 'limit' not in query_lower:
+        if "limit" not in query_lower:
             query += f" LIMIT {input.limit}"
 
         results = await db_manager.execute_query(query, input.params)
@@ -438,15 +473,13 @@ async def execute_select_query(input: QueryInput) -> Dict[str, Any]:
             "query": query,
             "results": results,
             "row_count": len(results),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Failed to execute query: {e}")
-        return {
-            "success": False,
-            "error": f"Query execution failed: {str(e)}"
-        }
+        return {"success": False, "error": f"Query execution failed: {str(e)}"}
+
 
 @mcp.tool()
 async def insert_record(input: InsertRecordInput) -> Dict[str, Any]:
@@ -455,7 +488,7 @@ async def insert_record(input: InsertRecordInput) -> Dict[str, Any]:
         if not await db_manager.ensure_connected():
             return {
                 "success": False,
-                "error": "Failed to establish database connection"
+                "error": "Failed to establish database connection",
             }
 
         # Build INSERT query
@@ -475,15 +508,13 @@ async def insert_record(input: InsertRecordInput) -> Dict[str, Any]:
             "success": True,
             "table": input.table_name,
             "inserted_record": result[0] if result else None,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Failed to insert record: {e}")
-        return {
-            "success": False,
-            "error": f"Insert failed: {str(e)}"
-        }
+        return {"success": False, "error": f"Insert failed: {str(e)}"}
+
 
 @mcp.tool()
 async def update_record(input: UpdateRecordInput) -> Dict[str, Any]:
@@ -492,7 +523,7 @@ async def update_record(input: UpdateRecordInput) -> Dict[str, Any]:
         if not await db_manager.ensure_connected():
             return {
                 "success": False,
-                "error": "Failed to establish database connection"
+                "error": "Failed to establish database connection",
             }
 
         # Build UPDATE query
@@ -523,15 +554,13 @@ async def update_record(input: UpdateRecordInput) -> Dict[str, Any]:
             "table": input.table_name,
             "updated_records": results,
             "affected_rows": len(results),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Failed to update record: {e}")
-        return {
-            "success": False,
-            "error": f"Update failed: {str(e)}"
-        }
+        return {"success": False, "error": f"Update failed: {str(e)}"}
+
 
 @mcp.tool()
 async def delete_record(input: DeleteRecordInput) -> Dict[str, Any]:
@@ -540,7 +569,7 @@ async def delete_record(input: DeleteRecordInput) -> Dict[str, Any]:
         if not await db_manager.ensure_connected():
             return {
                 "success": False,
-                "error": "Failed to establish database connection"
+                "error": "Failed to establish database connection",
             }
 
         query = f"DELETE FROM {input.table_name} WHERE {input.where_clause}"
@@ -548,21 +577,19 @@ async def delete_record(input: DeleteRecordInput) -> Dict[str, Any]:
         result = await db_manager.execute_command(query, input.where_params)
 
         # Extract affected rows count from result
-        affected_rows = int(result.split()[-1]) if result.startswith('DELETE') else 0
+        affected_rows = int(result.split()[-1]) if result.startswith("DELETE") else 0
 
         return {
             "success": True,
             "table": input.table_name,
             "affected_rows": affected_rows,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Failed to delete record: {e}")
-        return {
-            "success": False,
-            "error": f"Delete failed: {str(e)}"
-        }
+        return {"success": False, "error": f"Delete failed: {str(e)}"}
+
 
 @mcp.tool()
 async def get_table_stats(input: TableNameInput) -> Dict[str, Any]:
@@ -571,7 +598,7 @@ async def get_table_stats(input: TableNameInput) -> Dict[str, Any]:
         if not await db_manager.ensure_connected():
             return {
                 "success": False,
-                "error": "Failed to establish database connection"
+                "error": "Failed to establish database connection",
             }
 
         # Get row count
@@ -589,19 +616,17 @@ async def get_table_stats(input: TableNameInput) -> Dict[str, Any]:
         return {
             "success": True,
             "table_name": input.table_name,
-            "row_count": row_count[0]['count'] if row_count else 0,
-            "total_size": size_info[0]['total_size'] if size_info else "0 bytes",
-            "table_size": size_info[0]['table_size'] if size_info else "0 bytes",
-            "index_size": size_info[0]['index_size'] if size_info else "0 bytes",
-            "timestamp": datetime.now().isoformat()
+            "row_count": row_count[0]["count"] if row_count else 0,
+            "total_size": size_info[0]["total_size"] if size_info else "0 bytes",
+            "table_size": size_info[0]["table_size"] if size_info else "0 bytes",
+            "index_size": size_info[0]["index_size"] if size_info else "0 bytes",
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Failed to get table stats: {e}")
-        return {
-            "success": False,
-            "error": f"Failed to get table stats: {str(e)}"
-        }
+        return {"success": False, "error": f"Failed to get table stats: {str(e)}"}
+
 
 async def initialize_database():
     """Initialize database connection."""
@@ -615,9 +640,13 @@ async def initialize_database():
         try:
             health = await get_database_health()
             if health.get("success"):
-                logger.info(f"✅ Database health check passed: {health['data']['database']}")
+                logger.info(
+                    f"✅ Database health check passed: {health['data']['database']}"
+                )
             else:
-                logger.warning(f"⚠️ Database health check failed: {health.get('error')}")
+                logger.warning(
+                    f"⚠️ Database health check failed: {health.get('error')}"
+                )
         except Exception as e:
             logger.warning(f"⚠️ Database health check error: {e}")
 
@@ -625,6 +654,7 @@ async def initialize_database():
     else:
         logger.error("❌ Failed to connect to database")
         return False
+
 
 if __name__ == "__main__":
     # Global flag to track if we should cleanup
@@ -634,7 +664,9 @@ if __name__ == "__main__":
         # Initialize database connection
         if asyncio.run(initialize_database()):
             cleanup_needed = True
-            logger.info("✅ All PostgreSQL database functionality integrated with FastMCP protocol")
+            logger.info(
+                "✅ All PostgreSQL database functionality integrated with FastMCP protocol"
+            )
             logger.info("🌐 Starting FastMCP server...")
 
             # Run the FastMCP server (this is a blocking call)

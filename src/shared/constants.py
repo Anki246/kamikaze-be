@@ -5,8 +5,16 @@ Contains common constants used across the application.
 
 # Trading pairs and symbols
 TRADING_PAIRS = [
-    "BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "XRPUSDT",
-    "SOLUSDT", "DOTUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT"
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT",
+    "ADAUSDT",
+    "XRPUSDT",
+    "SOLUSDT",
+    "DOTUSDT",
+    "DOGEUSDT",
+    "AVAXUSDT",
+    "LINKUSDT",
 ]
 
 # API endpoints
@@ -14,7 +22,7 @@ API_ENDPOINTS = {
     "binance_spot": "https://api.binance.com",
     "binance_futures": "https://fapi.binance.com",
     "binance_websocket": "wss://stream.binance.com:9443/ws/",
-    "binance_futures_websocket": "wss://fstream.binance.com/ws/"
+    "binance_futures_websocket": "wss://fstream.binance.com/ws/",
 }
 
 # Default configuration
@@ -29,7 +37,7 @@ DEFAULT_CONFIG = {
     "allocation_eth": 0.3,
     "allocation_alt": 0.3,
     "signal_threshold": 0.03,
-    "momentum_threshold": 0.02
+    "momentum_threshold": 0.02,
 }
 
 # Technical analysis parameters
@@ -43,7 +51,7 @@ TA_PARAMS = {
     "bb_period": 20,
     "bb_std": 2,
     "sma_short": 10,
-    "sma_long": 50
+    "sma_long": 50,
 }
 
 # Timeframes for analysis
@@ -54,5 +62,5 @@ RISK_PARAMS = {
     "max_position_size": 1000.0,
     "max_daily_loss": 100.0,
     "max_drawdown": 0.1,
-    "position_sizing": "fixed"
+    "position_sizing": "fixed",
 }

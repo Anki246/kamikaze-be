@@ -24,39 +24,40 @@ from typing import Dict, List, Optional
 import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
+
+from shared.logging_config import setup_logging
+
+# User Context middleware - CRITICAL: Add dynamic user context system
+from .middleware.user_context_middleware import UserContextMiddleware
+from .models.agent_models import (AgentConfigResponse, AgentCreateRequest,
+                                  AgentResponse, AgentStatusResponse,
+                                  TradingMetricsResponse)
+from .models.market_models import (MarketDataResponse, MarketStatsResponse,
+                                   TechnicalIndicatorsResponse, TickerResponse)
+from .routes.agent_routes import router as agent_router
+from .routes.agent_routes import set_managers as set_agent_managers
+from .routes.auth_routes import router as auth_router
+from .routes.bot_routes import router as bot_router
+from .routes.bot_routes import set_agent_manager as set_bot_agent_manager
+from .routes.credentials_routes import router as credentials_router
+from .routes.dashboard_routes import router as dashboard_router
+from .routes.database_routes import router as database_router
+from .routes.market_routes import router as market_router
+from .routes.market_routes import set_market_data_api as set_market_api
+from .routes.trading_routes import router as trading_router
+from .routes.trading_routes import set_market_data_api as set_trading_api
+from .routes.user_status_routes import router as user_status_router
+from .routes.websocket_routes import router as websocket_router
+from .routes.websocket_routes import set_managers as set_ws_managers
+from .services.agent_manager import AgentManager
+from .services.market_data_api import MarketDataAPI
+from .services.websocket_manager import WebSocketManager
 
 # Add src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from .services.agent_manager import AgentManager
-from .services.websocket_manager import WebSocketManager
-from .services.market_data_api import MarketDataAPI
-from .routes.database_routes import router as database_router
-from .routes.agent_routes import router as agent_router, set_managers as set_agent_managers
-from .routes.market_routes import router as market_router, set_market_data_api as set_market_api
-from .routes.trading_routes import router as trading_router, set_market_data_api as set_trading_api
-from .routes.websocket_routes import router as websocket_router, set_managers as set_ws_managers
-from .routes.auth_routes import router as auth_router
-from .routes.credentials_routes import router as credentials_router
-from .routes.dashboard_routes import router as dashboard_router
-from .routes.bot_routes import router as bot_router, set_agent_manager as set_bot_agent_manager
-from .routes.user_status_routes import router as user_status_router
-from .models.agent_models import (
-    AgentCreateRequest,
-    AgentResponse,
-    AgentStatusResponse,
-    AgentConfigResponse,
-    TradingMetricsResponse
-)
-from .models.market_models import (
-    MarketDataResponse,
-    TickerResponse,
-    TechnicalIndicatorsResponse,
-    MarketStatsResponse
-)
-from shared.logging_config import setup_logging
 
 # Configure logging
 logger = setup_logging("fastapi_backend")
@@ -101,6 +102,7 @@ async def lifespan(app: FastAPI):
     set_ws_managers(websocket_manager, market_data_api)
     # Initialize direct auth database connection
     from ..infrastructure.auth_database import auth_db
+
     try:
         if await auth_db.connect():
             logger.info("✅ Auth database connected successfully")
@@ -111,6 +113,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize credentials database connection
     from ..infrastructure.credentials_database import credentials_db
+
     try:
         if await credentials_db.connect():
             logger.info("✅ Credentials database connected successfully")
@@ -132,10 +135,12 @@ async def lifespan(app: FastAPI):
 
     # Disconnect auth database
     from ..infrastructure.auth_database import auth_db
+
     await auth_db.disconnect()
 
     # Disconnect credentials database
     from ..infrastructure.credentials_database import credentials_db
+
     await credentials_db.disconnect()
 
     logger.info("✅ FluxTrader Backend shutdown complete")
@@ -146,7 +151,7 @@ app = FastAPI(
     title="FluxTrader Agentic AI API",
     description="Modern multi-agent trading system with real-time capabilities",
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS middleware
@@ -158,8 +163,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# User Context middleware - CRITICAL: Add dynamic user context system
-from .middleware.user_context_middleware import UserContextMiddleware
+
 app.add_middleware(UserContextMiddleware)
 
 # Include routers
@@ -174,11 +178,13 @@ app.include_router(user_status_router)
 app.include_router(dashboard_router)
 app.include_router(bot_router)
 
+
 # Root endpoint - Redirect to interactive API documentation
 @app.get("/")
 async def root():
     """Redirect to interactive API documentation."""
     return RedirectResponse(url="/docs")
+
 
 # API Information endpoint
 @app.get("/api/info")
@@ -197,35 +203,33 @@ async def api_info():
                 "endpoints": [
                     "/api/database/health",
                     "/api/database/tables",
-                    "/api/database/ping"
-                ]
+                    "/api/database/ping",
+                ],
             },
             "trading": {
                 "status": "available",
                 "description": "Binance trading integration with FastMCP",
-                "features": ["futures_trading", "market_data", "technical_analysis"]
+                "features": ["futures_trading", "market_data", "technical_analysis"],
             },
             "agents": {
                 "status": "ready",
                 "description": "AI trading agents management",
-                "endpoints": [
-                    "/api/v1/agents",
-                    "/api/v1/agents/{agent_id}"
-                ]
-            }
+                "endpoints": ["/api/v1/agents", "/api/v1/agents/{agent_id}"],
+            },
         },
         "documentation": {
             "swagger_ui": "/docs",
             "redoc": "/redoc",
-            "openapi_json": "/openapi.json"
+            "openapi_json": "/openapi.json",
         },
         "health_check": "/health",
         "frontend_url": "http://localhost:3000",
         "mcp_servers": {
             "binance": "FastMCP server for trading operations",
-            "postgresql": "FastMCP server for database operations"
-        }
+            "postgresql": "FastMCP server for database operations",
+        },
     }
+
 
 # Health check endpoint
 @app.get("/health")
@@ -237,9 +241,11 @@ async def health_check():
         "version": "2.0.0",
         "services": {
             "agent_manager": agent_manager.is_healthy() if agent_manager else False,
-            "websocket_manager": websocket_manager.is_healthy() if websocket_manager else False,
-            "market_data_api": market_data_api.connected if market_data_api else False
-        }
+            "websocket_manager": websocket_manager.is_healthy()
+            if websocket_manager
+            else False,
+            "market_data_api": market_data_api.connected if market_data_api else False,
+        },
     }
 
 
@@ -284,7 +290,7 @@ async def start_agent(agent_id: str):
             "status": "success",
             "message": f"Agent {agent_id} started successfully",
             "agent_id": agent_id,
-            "result": result
+            "result": result,
         }
     except Exception as e:
         logger.error(f"Failed to start agent {agent_id}: {e}")
@@ -308,7 +314,7 @@ async def stop_agent(agent_id: str):
             "status": "success",
             "message": f"Agent {agent_id} stopped successfully",
             "agent_id": agent_id,
-            "result": result
+            "result": result,
         }
     except Exception as e:
         logger.error(f"Failed to stop agent {agent_id}: {e}")
@@ -365,7 +371,7 @@ async def update_agent_config(agent_id: str, config: Dict):
         return {
             "status": "success",
             "message": f"Agent {agent_id} configuration updated",
-            "result": result
+            "result": result,
         }
     except Exception as e:
         logger.error(f"Failed to update agent {agent_id} config: {e}")
@@ -384,7 +390,9 @@ async def get_ticker(symbol: str):
         return ticker_data
     except Exception as e:
         logger.error(f"Failed to get ticker for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get ticker data: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get ticker data: {str(e)}"
+        )
 
 
 @app.get("/api/v1/market/data", response_model=MarketDataResponse)
@@ -394,12 +402,14 @@ async def get_market_data(symbols: str):
         raise HTTPException(status_code=503, detail="Market data service not available")
 
     try:
-        symbol_list = [s.strip().upper() for s in symbols.split(',')]
+        symbol_list = [s.strip().upper() for s in symbols.split(",")]
         market_data = await market_data_api.get_market_data(symbol_list)
         return market_data
     except Exception as e:
         logger.error(f"Failed to get market data for {symbols}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get market data: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get market data: {str(e)}"
+        )
 
 
 @app.get("/api/v1/market/stats", response_model=MarketStatsResponse)
@@ -409,27 +419,37 @@ async def get_market_stats(symbols: str):
         raise HTTPException(status_code=503, detail="Market data service not available")
 
     try:
-        symbol_list = [s.strip().upper() for s in symbols.split(',')]
+        symbol_list = [s.strip().upper() for s in symbols.split(",")]
         stats = await market_data_api.get_market_stats(symbol_list)
         return stats
     except Exception as e:
         logger.error(f"Failed to get market stats for {symbols}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get market stats: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get market stats: {str(e)}"
+        )
 
 
-@app.get("/api/v1/market/indicators/{symbol}", response_model=TechnicalIndicatorsResponse)
-async def get_technical_indicators(symbol: str, timeframe: str = "1h", indicators: str = "RSI,MACD,BB,SMA,EMA"):
+@app.get(
+    "/api/v1/market/indicators/{symbol}", response_model=TechnicalIndicatorsResponse
+)
+async def get_technical_indicators(
+    symbol: str, timeframe: str = "1h", indicators: str = "RSI,MACD,BB,SMA,EMA"
+):
     """Get technical indicators for a symbol."""
     if not market_data_api:
         raise HTTPException(status_code=503, detail="Market data service not available")
 
     try:
-        indicator_list = [i.strip() for i in indicators.split(',')]
-        indicators_data = await market_data_api.get_technical_indicators(symbol.upper(), timeframe, indicator_list)
+        indicator_list = [i.strip() for i in indicators.split(",")]
+        indicators_data = await market_data_api.get_technical_indicators(
+            symbol.upper(), timeframe, indicator_list
+        )
         return indicators_data
     except Exception as e:
         logger.error(f"Failed to get indicators for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get technical indicators: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get technical indicators: {str(e)}"
+        )
 
 
 # WebSocket endpoint for real-time updates
@@ -458,7 +478,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         await websocket_manager.subscribe_to_agent(client_id, agent_id)
             except (json.JSONDecodeError, KeyError, TypeError):
                 # Ignore malformed messages
-                logger.debug(f"Received malformed WebSocket message from {client_id}: {data}")
+                logger.debug(
+                    f"Received malformed WebSocket message from {client_id}: {data}"
+                )
                 pass
 
     except WebSocketDisconnect:
@@ -487,20 +509,26 @@ async def market_data_websocket(websocket: WebSocket, client_id: str):
                 if message_type == "subscribe_market_data":
                     symbols = message.get("symbols", [])
                     # Subscribe to market data updates for these symbols
-                    await websocket_manager.send_personal_message(client_id, {
-                        "type": "subscription_confirmed",
-                        "symbols": symbols,
-                        "message": f"Subscribed to market data for {len(symbols)} symbols"
-                    })
+                    await websocket_manager.send_personal_message(
+                        client_id,
+                        {
+                            "type": "subscription_confirmed",
+                            "symbols": symbols,
+                            "message": f"Subscribed to market data for {len(symbols)} symbols",
+                        },
+                    )
 
                     # Send initial market data
                     if symbols:
                         try:
                             market_data = await market_data_api.get_market_data(symbols)
-                            await websocket_manager.send_personal_message(client_id, {
-                                "type": "market_data_update",
-                                "data": market_data if market_data else {}
-                            })
+                            await websocket_manager.send_personal_message(
+                                client_id,
+                                {
+                                    "type": "market_data_update",
+                                    "data": market_data if market_data else {},
+                                },
+                            )
                         except Exception as e:
                             logger.error(f"Failed to send initial market data: {e}")
 
@@ -508,17 +536,13 @@ async def market_data_websocket(websocket: WebSocket, client_id: str):
                     await websocket.send_text('{"type": "pong"}')
 
             except (json.JSONDecodeError, KeyError, TypeError) as e:
-                logger.debug(f"Received malformed market data WebSocket message from {client_id}: {data}")
+                logger.debug(
+                    f"Received malformed market data WebSocket message from {client_id}: {data}"
+                )
 
     except WebSocketDisconnect:
         await websocket_manager.disconnect(client_id)
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")

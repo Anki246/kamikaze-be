@@ -3,11 +3,11 @@ Shared Utility Functions for Enhanced Billa Trading Bot
 Contains common helper functions used across the application.
 """
 
-import time
-import hmac
 import hashlib
+import hmac
+import time
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 def format_currency(amount: float, currency: str = "USDT", decimals: int = 2) -> str:
@@ -25,9 +25,7 @@ def calculate_percentage_change(old_value: float, new_value: float) -> float:
 def generate_binance_signature(query_string: str, secret_key: str) -> str:
     """Generate HMAC SHA256 signature for Binance API."""
     return hmac.new(
-        secret_key.encode('utf-8'),
-        query_string.encode('utf-8'),
-        hashlib.sha256
+        secret_key.encode("utf-8"), query_string.encode("utf-8"), hashlib.sha256
     ).hexdigest()
 
 
@@ -50,15 +48,15 @@ def calculate_position_size(
     account_balance: float,
     risk_percentage: float,
     entry_price: float,
-    stop_loss_price: float
+    stop_loss_price: float,
 ) -> float:
     """Calculate position size based on risk management."""
     risk_amount = account_balance * (risk_percentage / 100)
     price_difference = abs(entry_price - stop_loss_price)
-    
+
     if price_difference == 0:
         return 0.0
-    
+
     return risk_amount / price_difference
 
 
@@ -86,12 +84,13 @@ def format_log_message(level: str, message: str, **kwargs) -> str:
 def validate_environment_variables(required_vars: List[str]) -> Dict[str, bool]:
     """Validate that required environment variables are set."""
     import os
+
     return {var: bool(os.getenv(var)) for var in required_vars}
 
 
 def chunk_list(lst: List[Any], chunk_size: int) -> List[List[Any]]:
     """Split list into chunks of specified size."""
-    return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+    return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 
 def merge_dicts(*dicts: Dict[str, Any]) -> Dict[str, Any]:

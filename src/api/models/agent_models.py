@@ -4,12 +4,14 @@ Pydantic models for agent API responses and requests
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
 class AgentStatus(str, Enum):
     """Agent status enumeration."""
+
     STOPPED = "stopped"
     STARTING = "starting"
     RUNNING = "running"
@@ -19,6 +21,7 @@ class AgentStatus(str, Enum):
 
 class StrategyType(str, Enum):
     """Trading strategy types."""
+
     PUMP_DUMP = "pump_dump"
     ARBITRAGE = "arbitrage"
     DCA = "dca"
@@ -31,6 +34,7 @@ class StrategyType(str, Enum):
 
 class RiskLevel(str, Enum):
     """Risk level enumeration."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -38,6 +42,7 @@ class RiskLevel(str, Enum):
 
 class AgentMetadata(BaseModel):
     """Agent metadata information."""
+
     name: str
     version: str
     strategy_type: StrategyType
@@ -53,6 +58,7 @@ class AgentMetadata(BaseModel):
 
 class AgentPerformanceMetrics(BaseModel):
     """Agent performance metrics."""
+
     total_pnl: float = 0.0
     roi: float = 0.0
     win_rate: float = 0.0
@@ -67,6 +73,7 @@ class AgentPerformanceMetrics(BaseModel):
 
 class AgentConfiguration(BaseModel):
     """Agent configuration settings."""
+
     trading_pairs: List[str] = Field(default_factory=list)
     risk_level: RiskLevel = RiskLevel.MEDIUM
     max_position_size: float = 100.0
@@ -86,6 +93,7 @@ class AgentConfiguration(BaseModel):
 
 class AgentRuntimeData(BaseModel):
     """Agent runtime information."""
+
     uptime: Optional[int] = None
     last_activity: Optional[datetime] = None
     current_cycle: Optional[int] = None
@@ -97,6 +105,7 @@ class AgentRuntimeData(BaseModel):
 
 class AgentCreateRequest(BaseModel):
     """Request model for creating a new agent."""
+
     agent_type: StrategyType
     agent_id: Optional[str] = None
     configuration: Optional[AgentConfiguration] = None
@@ -104,6 +113,7 @@ class AgentCreateRequest(BaseModel):
 
 class AgentResponse(BaseModel):
     """Complete agent information response."""
+
     id: str
     metadata: AgentMetadata
     status: AgentStatus
@@ -117,6 +127,7 @@ class AgentResponse(BaseModel):
 
 class AgentStatusResponse(BaseModel):
     """Agent status response."""
+
     agent_id: str
     status: AgentStatus
     is_running: bool
@@ -132,6 +143,7 @@ class AgentStatusResponse(BaseModel):
 
 class TradingMetricsResponse(BaseModel):
     """Trading metrics response."""
+
     agent_id: str
     performance: AgentPerformanceMetrics
     balance: Dict[str, float]
@@ -143,6 +155,7 @@ class TradingMetricsResponse(BaseModel):
 
 class AgentConfigResponse(BaseModel):
     """Agent configuration response."""
+
     agent_id: str
     configuration: AgentConfiguration
     metadata: AgentMetadata
@@ -151,6 +164,7 @@ class AgentConfigResponse(BaseModel):
 
 class AgentLogEntry(BaseModel):
     """Agent log entry."""
+
     timestamp: datetime
     level: str
     message: str
@@ -160,6 +174,7 @@ class AgentLogEntry(BaseModel):
 
 class AgentLogsResponse(BaseModel):
     """Agent logs response."""
+
     agent_id: str
     logs: List[AgentLogEntry]
     total_count: int
@@ -169,6 +184,7 @@ class AgentLogsResponse(BaseModel):
 
 class WebSocketMessage(BaseModel):
     """WebSocket message format."""
+
     type: str
     agent_id: Optional[str] = None
     data: Dict[str, Any] = Field(default_factory=dict)
@@ -177,6 +193,7 @@ class WebSocketMessage(BaseModel):
 
 class AgentUpdateMessage(WebSocketMessage):
     """Agent update WebSocket message."""
+
     type: str = "agent_update"
     agent_id: str
     status: AgentStatus
@@ -185,6 +202,7 @@ class AgentUpdateMessage(WebSocketMessage):
 
 class TradingSignalMessage(WebSocketMessage):
     """Trading signal WebSocket message."""
+
     type: str = "trading_signal"
     agent_id: str
     signal_type: str
@@ -196,6 +214,7 @@ class TradingSignalMessage(WebSocketMessage):
 
 class TradeExecutionMessage(WebSocketMessage):
     """Trade execution WebSocket message."""
+
     type: str = "trade_execution"
     agent_id: str
     trade_id: str
@@ -208,6 +227,7 @@ class TradeExecutionMessage(WebSocketMessage):
 
 class SystemHealthMessage(WebSocketMessage):
     """System health WebSocket message."""
+
     type: str = "system_health"
     services: Dict[str, bool]
     agent_count: int
@@ -216,6 +236,7 @@ class SystemHealthMessage(WebSocketMessage):
 
 class ErrorMessage(WebSocketMessage):
     """Error WebSocket message."""
+
     type: str = "error"
     error_code: str
     error_message: str

@@ -5,19 +5,22 @@ Handles PostgreSQL database configuration and connection management
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 # Load environment variables
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
 
+
 @dataclass
 class DatabaseConfig:
     """PostgreSQL database configuration."""
+
     host: str = "localhost"
     port: int = 5432
     database: str = "kamikaze"
@@ -27,29 +30,54 @@ class DatabaseConfig:
     max_pool_size: int = 10
     command_timeout: int = 30
     ssl_mode: str = "prefer"
-    
+
     def __post_init__(self):
         """Load configuration from environment variables."""
         # Use DB_ prefix for consistency with FastMCP server
         self.host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", self.host))
-        self.port = int(os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", str(self.port))))
-        self.database = os.getenv("DB_NAME", os.getenv("POSTGRES_DATABASE", self.database))
+        self.port = int(
+            os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", str(self.port)))
+        )
+        self.database = os.getenv(
+            "DB_NAME", os.getenv("POSTGRES_DATABASE", self.database)
+        )
         self.user = os.getenv("DB_USER", os.getenv("POSTGRES_USER", self.user))
-        self.password = os.getenv("DB_PASSWORD", os.getenv("POSTGRES_PASSWORD", self.password))
-        self.min_pool_size = int(os.getenv("DB_MIN_SIZE", os.getenv("POSTGRES_MIN_POOL_SIZE", str(self.min_pool_size))))
-        self.max_pool_size = int(os.getenv("DB_MAX_SIZE", os.getenv("POSTGRES_MAX_POOL_SIZE", str(self.max_pool_size))))
-        self.command_timeout = int(os.getenv("DB_TIMEOUT", os.getenv("POSTGRES_COMMAND_TIMEOUT", str(self.command_timeout))))
-        self.ssl_mode = os.getenv("DB_SSL_MODE", os.getenv("POSTGRES_SSL_MODE", self.ssl_mode))
+        self.password = os.getenv(
+            "DB_PASSWORD", os.getenv("POSTGRES_PASSWORD", self.password)
+        )
+        self.min_pool_size = int(
+            os.getenv(
+                "DB_MIN_SIZE",
+                os.getenv("POSTGRES_MIN_POOL_SIZE", str(self.min_pool_size)),
+            )
+        )
+        self.max_pool_size = int(
+            os.getenv(
+                "DB_MAX_SIZE",
+                os.getenv("POSTGRES_MAX_POOL_SIZE", str(self.max_pool_size)),
+            )
+        )
+        self.command_timeout = int(
+            os.getenv(
+                "DB_TIMEOUT",
+                os.getenv("POSTGRES_COMMAND_TIMEOUT", str(self.command_timeout)),
+            )
+        )
+        self.ssl_mode = os.getenv(
+            "DB_SSL_MODE", os.getenv("POSTGRES_SSL_MODE", self.ssl_mode)
+        )
 
         # Validate that password is provided
         if not self.password:
-            raise ValueError("Database password must be provided via DB_PASSWORD environment variable")
-    
+            raise ValueError(
+                "Database password must be provided via DB_PASSWORD environment variable"
+            )
+
     @property
     def connection_string(self) -> str:
         """Get PostgreSQL connection string."""
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
-    
+
     @property
     def connection_params(self) -> dict:
         """Get connection parameters for asyncpg."""
@@ -61,8 +89,9 @@ class DatabaseConfig:
             "password": self.password,
             "min_size": self.min_pool_size,
             "max_size": self.max_pool_size,
-            "command_timeout": self.command_timeout
+            "command_timeout": self.command_timeout,
         }
+
 
 # Global database configuration instance
 db_config = DatabaseConfig()
@@ -82,7 +111,6 @@ SCHEMA_DEFINITIONS = {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """,
-    
     "testnet_credentials": """
         CREATE TABLE IF NOT EXISTS testnet_credentials (
             id SERIAL PRIMARY KEY,
@@ -96,7 +124,6 @@ SCHEMA_DEFINITIONS = {
             UNIQUE(user_id, exchange)
         )
     """,
-    
     "binance_credentials": """
         CREATE TABLE IF NOT EXISTS binance_credentials (
             id SERIAL PRIMARY KEY,
@@ -110,7 +137,6 @@ SCHEMA_DEFINITIONS = {
             UNIQUE(user_id, is_mainnet)
         )
     """,
-    
     "trading_agents": """
         CREATE TABLE IF NOT EXISTS trading_agents (
             id SERIAL PRIMARY KEY,
@@ -123,7 +149,6 @@ SCHEMA_DEFINITIONS = {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """,
-    
     "trading_sessions": """
         CREATE TABLE IF NOT EXISTS trading_sessions (
             id SERIAL PRIMARY KEY,
@@ -135,7 +160,6 @@ SCHEMA_DEFINITIONS = {
             status VARCHAR(20) DEFAULT 'active'
         )
     """,
-    
     "trades": """
         CREATE TABLE IF NOT EXISTS trades (
             id SERIAL PRIMARY KEY,
@@ -149,7 +173,6 @@ SCHEMA_DEFINITIONS = {
             fees DECIMAL(15,8) DEFAULT 0
         )
     """,
-    
     "market_data": """
         CREATE TABLE IF NOT EXISTS market_data (
             id SERIAL PRIMARY KEY,
@@ -160,7 +183,6 @@ SCHEMA_DEFINITIONS = {
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """,
-    
     "system_logs": """
         CREATE TABLE IF NOT EXISTS system_logs (
             id SERIAL PRIMARY KEY,
@@ -171,7 +193,7 @@ SCHEMA_DEFINITIONS = {
             metadata JSONB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    """
+    """,
 }
 
 # Indexes for better performance
@@ -187,5 +209,5 @@ INDEX_DEFINITIONS = [
     "CREATE INDEX IF NOT EXISTS idx_market_data_symbol_timestamp ON market_data(symbol, timestamp)",
     "CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level)",
     "CREATE INDEX IF NOT EXISTS idx_system_logs_component ON system_logs(component)",
-    "CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at)"
+    "CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at)",
 ]

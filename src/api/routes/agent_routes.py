@@ -3,9 +3,11 @@ Agent Management API Routes for FluxTrader
 Provides REST API endpoints for trading agent management
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from typing import Dict, List, Optional, Any
 import logging
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+
 from .auth_routes import get_current_user
 
 # Note: Model imports temporarily removed to avoid import issues
@@ -27,11 +29,13 @@ router = APIRouter(prefix="/api/v1/agents", tags=["Trading Agents"])
 agent_manager = None
 websocket_manager = None
 
+
 def set_managers(agent_mgr, ws_mgr):
     """Set the global managers."""
     global agent_manager, websocket_manager
     agent_manager = agent_mgr
     websocket_manager = ws_mgr
+
 
 @router.get("/")
 async def list_agents():
@@ -43,8 +47,9 @@ async def list_agents():
     return {
         "status": "success",
         "agents": agents,
-        "count": len(agents) if agents else 0
+        "count": len(agents) if agents else 0,
     }
+
 
 @router.get("/{agent_id}")
 async def get_agent(agent_id: str):
@@ -56,10 +61,8 @@ async def get_agent(agent_id: str):
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    return {
-        "status": "success",
-        "agent": agent
-    }
+    return {"status": "success", "agent": agent}
+
 
 @router.post("/{agent_id}/start")
 async def start_agent(agent_id: str, current_user: Dict = Depends(get_current_user)):
@@ -71,9 +74,13 @@ async def start_agent(agent_id: str, current_user: Dict = Depends(get_current_us
         # Get user ID from authenticated user context
         user_id = current_user.get("id")
         if not user_id:
-            raise HTTPException(status_code=401, detail="User ID not found in authentication context")
+            raise HTTPException(
+                status_code=401, detail="User ID not found in authentication context"
+            )
 
-        logger.info(f"🚀 Starting agent {agent_id} for user {user_id} (authenticated user: {current_user.get('email', 'unknown')})")
+        logger.info(
+            f"🚀 Starting agent {agent_id} for user {user_id} (authenticated user: {current_user.get('email', 'unknown')})"
+        )
 
         result = await agent_manager.start_agent(agent_id, user_id)
 
@@ -85,11 +92,12 @@ async def start_agent(agent_id: str, current_user: Dict = Depends(get_current_us
             "status": "success",
             "message": f"Agent {agent_id} started successfully",
             "agent_id": agent_id,
-            "result": result
+            "result": result,
         }
     except Exception as e:
         logger.error(f"Failed to start agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/{agent_id}/stop")
 async def stop_agent(agent_id: str, current_user: Dict = Depends(get_current_user)):
@@ -101,9 +109,13 @@ async def stop_agent(agent_id: str, current_user: Dict = Depends(get_current_use
         # Get user ID from authenticated user context
         user_id = current_user.get("id")
         if not user_id:
-            raise HTTPException(status_code=401, detail="User ID not found in authentication context")
+            raise HTTPException(
+                status_code=401, detail="User ID not found in authentication context"
+            )
 
-        logger.info(f"🛑 Stopping agent {agent_id} for user {user_id} (authenticated user: {current_user.get('email', 'unknown')})")
+        logger.info(
+            f"🛑 Stopping agent {agent_id} for user {user_id} (authenticated user: {current_user.get('email', 'unknown')})"
+        )
 
         result = await agent_manager.stop_agent(agent_id)
 
@@ -115,14 +127,17 @@ async def stop_agent(agent_id: str, current_user: Dict = Depends(get_current_use
             "status": "success",
             "message": f"Agent {agent_id} stopped successfully",
             "agent_id": agent_id,
-            "result": result
+            "result": result,
         }
     except Exception as e:
         logger.error(f"Failed to stop agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/{agent_id}/status")
-async def get_agent_status(agent_id: str, current_user: Dict = Depends(get_current_user)):
+async def get_agent_status(
+    agent_id: str, current_user: Dict = Depends(get_current_user)
+):
     """Get agent status and metrics."""
     if not agent_manager:
         raise HTTPException(status_code=503, detail="Agent manager not initialized")
@@ -130,20 +145,21 @@ async def get_agent_status(agent_id: str, current_user: Dict = Depends(get_curre
     # Get user ID from authenticated user context
     user_id = current_user.get("id")
     if not user_id:
-        raise HTTPException(status_code=401, detail="User ID not found in authentication context")
+        raise HTTPException(
+            status_code=401, detail="User ID not found in authentication context"
+        )
 
     status = await agent_manager.get_agent_status(agent_id)
     if not status:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    return {
-        "status": "success",
-        "agent_id": agent_id,
-        "data": status
-    }
+    return {"status": "success", "agent_id": agent_id, "data": status}
+
 
 @router.get("/{agent_id}/metrics")
-async def get_agent_metrics(agent_id: str, current_user: Dict = Depends(get_current_user)):
+async def get_agent_metrics(
+    agent_id: str, current_user: Dict = Depends(get_current_user)
+):
     """Get agent trading metrics."""
     if not agent_manager:
         raise HTTPException(status_code=503, detail="Agent manager not initialized")
@@ -151,20 +167,21 @@ async def get_agent_metrics(agent_id: str, current_user: Dict = Depends(get_curr
     # Get user ID from authenticated user context
     user_id = current_user.get("id")
     if not user_id:
-        raise HTTPException(status_code=401, detail="User ID not found in authentication context")
+        raise HTTPException(
+            status_code=401, detail="User ID not found in authentication context"
+        )
 
     metrics = await agent_manager.get_agent_metrics(agent_id)
     if not metrics:
         raise HTTPException(status_code=404, detail="Agent metrics not found")
 
-    return {
-        "status": "success",
-        "agent_id": agent_id,
-        "metrics": metrics
-    }
+    return {"status": "success", "agent_id": agent_id, "metrics": metrics}
+
 
 @router.get("/{agent_id}/config")
-async def get_agent_config(agent_id: str, current_user: Dict = Depends(get_current_user)):
+async def get_agent_config(
+    agent_id: str, current_user: Dict = Depends(get_current_user)
+):
     """Get agent configuration."""
     if not agent_manager:
         raise HTTPException(status_code=503, detail="Agent manager not initialized")
@@ -172,17 +189,16 @@ async def get_agent_config(agent_id: str, current_user: Dict = Depends(get_curre
     # Get user ID from authenticated user context
     user_id = current_user.get("id")
     if not user_id:
-        raise HTTPException(status_code=401, detail="User ID not found in authentication context")
+        raise HTTPException(
+            status_code=401, detail="User ID not found in authentication context"
+        )
 
     config = await agent_manager.get_agent_config(agent_id)
     if not config:
         raise HTTPException(status_code=404, detail="Agent configuration not found")
 
-    return {
-        "status": "success",
-        "agent_id": agent_id,
-        "config": config
-    }
+    return {"status": "success", "agent_id": agent_id, "config": config}
+
 
 @router.put("/{agent_id}/config")
 async def update_agent_config(agent_id: str, config: Dict):
@@ -195,14 +211,17 @@ async def update_agent_config(agent_id: str, config: Dict):
         return {
             "status": "success",
             "message": f"Agent {agent_id} configuration updated",
-            "result": result
+            "result": result,
         }
     except Exception as e:
         logger.error(f"Failed to update agent {agent_id} config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/create")
-async def create_agent(agent_request: Dict, current_user: Dict[str, Any] = Depends(get_current_user)):
+async def create_agent(
+    agent_request: Dict, current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Create a new trading agent."""
     if not agent_manager:
         raise HTTPException(status_code=503, detail="Agent manager not initialized")
@@ -214,11 +233,12 @@ async def create_agent(agent_request: Dict, current_user: Dict[str, Any] = Depen
         return {
             "status": "success",
             "message": f"Agent created successfully",
-            "agent": agent
+            "agent": agent,
         }
     except Exception as e:
         logger.error(f"Failed to create agent: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.delete("/{agent_id}")
 async def delete_agent(agent_id: str):
@@ -231,11 +251,12 @@ async def delete_agent(agent_id: str):
         return {
             "status": "success",
             "message": f"Agent {agent_id} deleted successfully",
-            "result": result
+            "result": result,
         }
     except Exception as e:
         logger.error(f"Failed to delete agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/types/available")
 async def get_available_agent_types():
@@ -245,10 +266,7 @@ async def get_available_agent_types():
 
     try:
         types = await agent_manager.get_available_agent_types()
-        return {
-            "status": "success",
-            "agent_types": types
-        }
+        return {"status": "success", "agent_types": types}
     except Exception as e:
         logger.error(f"Failed to get agent types: {e}")
         raise HTTPException(status_code=500, detail=str(e))

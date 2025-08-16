@@ -14,7 +14,7 @@ def setup_logging(
     log_level: str = "INFO",
     log_to_file: bool = True,
     log_to_console: bool = True,
-    log_type: str = "system"
+    log_type: str = "system",
 ) -> logging.Logger:
     """
     Setup centralized logging configuration with organized directory structure.
@@ -50,8 +50,8 @@ def setup_logging(
 
     # Create formatter
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     # Add console handler if requested
@@ -106,7 +106,9 @@ def create_session_log_file(session_type: str, session_id: str) -> Path:
     return log_file_path
 
 
-def setup_session_logging(session_type: str, session_id: str) -> Tuple[logging.Logger, Path]:
+def setup_session_logging(
+    session_type: str, session_id: str
+) -> Tuple[logging.Logger, Path]:
     """
     Setup logging for a trading session with dedicated log file.
 
@@ -131,8 +133,7 @@ def setup_session_logging(session_type: str, session_id: str) -> Tuple[logging.L
 
     # Create formatter
     formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        "%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
 
     # Add console handler
@@ -151,79 +152,79 @@ def setup_session_logging(session_type: str, session_id: str) -> Tuple[logging.L
 def setup_component_logging(component_name: str, config=None) -> logging.Logger:
     """
     Setup logging for a specific component with configuration.
-    
+
     Args:
         component_name: Name of the component
         config: Configuration object with logging settings
-    
+
     Returns:
         Configured logger instance
     """
     log_level = "INFO"
-    
+
     # Get log level from config if available
-    if config and hasattr(config, 'app') and hasattr(config.app, 'log_level'):
+    if config and hasattr(config, "app") and hasattr(config.app, "log_level"):
         log_level = config.app.log_level
-    
+
     return setup_logging(
         component_name=component_name,
         log_level=log_level,
         log_to_file=True,
-        log_to_console=True
+        log_to_console=True,
     )
 
 
 class LogCapture:
     """Utility class to capture logs for API/UI display."""
-    
+
     def __init__(self, max_entries: int = 1000):
         self.max_entries = max_entries
         self.entries = []
         self.handler = None
-    
+
     def setup_capture(self, logger_name: str = None):
         """Setup log capture for a specific logger or root logger."""
         if logger_name:
             logger = logging.getLogger(logger_name)
         else:
             logger = logging.getLogger()
-        
+
         self.handler = LogCaptureHandler(self)
         logger.addHandler(self.handler)
-    
+
     def get_recent_logs(self, count: Optional[int] = None) -> list:
         """Get recent log entries."""
         if count:
             return self.entries[-count:]
         return self.entries.copy()
-    
+
     def clear_logs(self):
         """Clear captured logs."""
         self.entries.clear()
-    
+
     def add_entry(self, record):
         """Add a log entry."""
         entry = {
-            'timestamp': record.created,
-            'level': record.levelname,
-            'message': record.getMessage(),
-            'source': record.name
+            "timestamp": record.created,
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "source": record.name,
         }
-        
+
         self.entries.append(entry)
-        
+
         # Keep only max_entries
         if len(self.entries) > self.max_entries:
-            self.entries = self.entries[-self.max_entries:]
+            self.entries = self.entries[-self.max_entries :]
 
 
 class LogCaptureHandler(logging.Handler):
     """Custom logging handler to capture logs for API/UI display."""
-    
+
     def __init__(self, log_capture: LogCapture):
         super().__init__()
         self.log_capture = log_capture
-    
+
     def emit(self, record):
         """Emit a log record."""
         try:
@@ -246,51 +247,55 @@ def setup_global_log_capture():
 def get_log_files() -> dict:
     """Get list of available log files organized by type."""
     logs_dir = get_logs_directory()
-    log_files = {
-        'system': [],
-        'trading_sessions': [],
-        'archived': []
-    }
+    log_files = {"system": [], "trading_sessions": [], "archived": []}
 
     # Get system logs
     system_dir = logs_dir / "system"
     if system_dir.exists():
         for log_file in system_dir.glob("*.log"):
-            log_files['system'].append({
-                'name': log_file.name,
-                'path': str(log_file),
-                'size': log_file.stat().st_size,
-                'modified': log_file.stat().st_mtime,
-                'type': 'system'
-            })
+            log_files["system"].append(
+                {
+                    "name": log_file.name,
+                    "path": str(log_file),
+                    "size": log_file.stat().st_size,
+                    "modified": log_file.stat().st_mtime,
+                    "type": "system",
+                }
+            )
 
     # Get trading session logs
     sessions_dir = logs_dir / "trading_sessions"
     if sessions_dir.exists():
         for log_file in sessions_dir.glob("*.log"):
-            log_files['trading_sessions'].append({
-                'name': log_file.name,
-                'path': str(log_file),
-                'size': log_file.stat().st_size,
-                'modified': log_file.stat().st_mtime,
-                'type': 'trading_session'
-            })
+            log_files["trading_sessions"].append(
+                {
+                    "name": log_file.name,
+                    "path": str(log_file),
+                    "size": log_file.stat().st_size,
+                    "modified": log_file.stat().st_mtime,
+                    "type": "trading_session",
+                }
+            )
 
     # Get archived logs
     archived_dir = logs_dir / "archived"
     if archived_dir.exists():
         for log_file in archived_dir.glob("*.log"):
-            log_files['archived'].append({
-                'name': log_file.name,
-                'path': str(log_file),
-                'size': log_file.stat().st_size,
-                'modified': log_file.stat().st_mtime,
-                'type': 'archived'
-            })
+            log_files["archived"].append(
+                {
+                    "name": log_file.name,
+                    "path": str(log_file),
+                    "size": log_file.stat().st_size,
+                    "modified": log_file.stat().st_mtime,
+                    "type": "archived",
+                }
+            )
 
     # Sort each category by modification time (newest first)
     for category in log_files:
-        log_files[category] = sorted(log_files[category], key=lambda x: x['modified'], reverse=True)
+        log_files[category] = sorted(
+            log_files[category], key=lambda x: x["modified"], reverse=True
+        )
 
     return log_files
 
@@ -317,11 +322,11 @@ def cleanup_old_logs(days_to_keep: int = 30, archive_old_sessions: bool = True):
             if log_file.stat().st_mtime < cutoff_time:
                 try:
                     # Rotate system logs by keeping last 1000 lines
-                    with open(log_file, 'r') as f:
+                    with open(log_file, "r") as f:
                         lines = f.readlines()
 
                     if len(lines) > 1000:
-                        with open(log_file, 'w') as f:
+                        with open(log_file, "w") as f:
                             f.writelines(lines[-1000:])
                         print(f"Rotated system log file: {log_file.name}")
                 except Exception as e:

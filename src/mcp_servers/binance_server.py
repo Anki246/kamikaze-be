@@ -22,36 +22,62 @@ Features:
 """
 
 import asyncio
-import aiohttp
-import json
-import time
-import hmac
 import hashlib
-import os
+import hmac
+import json
 import logging
+import os
+import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+import aiohttp
 import numpy as np
 import pandas as pd
+
 # Optional MCP imports - gracefully handle if not available
 try:
     from mcp.server.models import InitializationOptions
     from mcp.server import NotificationOptions, Server
     from mcp.types import (
-        Resource, Tool, TextContent, ImageContent, EmbeddedResource, LoggingLevel
+        Resource,
+        Tool,
+        TextContent,
+        ImageContent,
+        EmbeddedResource,
+        LoggingLevel,
     )
+
     MCP_AVAILABLE = True
 except ImportError:
     # Mock MCP classes if not available
-    class InitializationOptions: pass
-    class NotificationOptions: pass
-    class Server: pass
-    class Resource: pass
-    class Tool: pass
-    class TextContent: pass
-    class ImageContent: pass
-    class EmbeddedResource: pass
-    class LoggingLevel: pass
+    class InitializationOptions:
+        pass
+
+    class NotificationOptions:
+        pass
+
+    class Server:
+        pass
+
+    class Resource:
+        pass
+
+    class Tool:
+        pass
+
+    class TextContent:
+        pass
+
+    class ImageContent:
+        pass
+
+    class EmbeddedResource:
+        pass
+
+    class LoggingLevel:
+        pass
+
     MCP_AVAILABLE = False
     print("⚠️  MCP package not available - using mock classes")
 # Import handled in the try-except block above
@@ -59,6 +85,7 @@ except ImportError:
 # Technical Analysis Libraries
 try:
     import talib
+
     TALIB_AVAILABLE = True
     print("✅ TA-Lib loaded successfully")
 except ImportError:
@@ -71,6 +98,7 @@ except ImportError:
 try:
     import yfinance as yf
     import ccxt
+
     MARKET_DATA_AVAILABLE = True
 except ImportError:
     MARKET_DATA_AVAILABLE = False
@@ -80,6 +108,7 @@ except ImportError:
 try:
     import requests
     from bs4 import BeautifulSoup
+
     WEB_SCRAPING_AVAILABLE = True
 except ImportError:
     WEB_SCRAPING_AVAILABLE = False
@@ -88,6 +117,7 @@ except ImportError:
 # WebSocket support for real-time data
 try:
     import websockets
+
     WEBSOCKET_AVAILABLE = True
 except ImportError:
     WEBSOCKET_AVAILABLE = False
@@ -96,6 +126,7 @@ except ImportError:
 # Load environment variables
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -103,6 +134,7 @@ except ImportError:
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class BinanceMCPServer:
     """
@@ -134,22 +166,22 @@ class BinanceMCPServer:
         self._setup_tools()
 
         logger.info("🔧 Enhanced Binance MCP Server with Technical Analysis initialized")
-        
+
     def _generate_signature(self, query_string: str) -> str:
         """Generate HMAC SHA256 signature for Binance API."""
         return hmac.new(
-            self.secret_key.encode('utf-8'),
-            query_string.encode('utf-8'),
-            hashlib.sha256
+            self.secret_key.encode("utf-8"),
+            query_string.encode("utf-8"),
+            hashlib.sha256,
         ).hexdigest()
-    
+
     def _get_timestamp(self) -> int:
         """Get current timestamp in milliseconds."""
         return int(time.time() * 1000)
-    
+
     def _setup_tools(self):
         """Setup all MCP tools for Binance operations."""
-        
+
         @self.server.list_tools()
         async def handle_list_tools() -> list[Tool]:
             """List all available Binance MCP tools."""
@@ -162,20 +194,16 @@ class BinanceMCPServer:
                         "properties": {
                             "symbol": {
                                 "type": "string",
-                                "description": "Trading pair symbol (e.g., BTCUSDT)"
+                                "description": "Trading pair symbol (e.g., BTCUSDT)",
                             }
                         },
-                        "required": ["symbol"]
-                    }
+                        "required": ["symbol"],
+                    },
                 ),
                 Tool(
                     name="get_account_balance",
                     description="Get futures account balance and available funds",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
+                    inputSchema={"type": "object", "properties": {}, "required": []},
                 ),
                 Tool(
                     name="get_symbol_info",
@@ -185,11 +213,11 @@ class BinanceMCPServer:
                         "properties": {
                             "symbol": {
                                 "type": "string",
-                                "description": "Trading pair symbol (e.g., BTCUSDT)"
+                                "description": "Trading pair symbol (e.g., BTCUSDT)",
                             }
                         },
-                        "required": ["symbol"]
-                    }
+                        "required": ["symbol"],
+                    },
                 ),
                 Tool(
                     name="place_futures_order",
@@ -199,24 +227,24 @@ class BinanceMCPServer:
                         "properties": {
                             "symbol": {
                                 "type": "string",
-                                "description": "Trading pair symbol"
+                                "description": "Trading pair symbol",
                             },
                             "side": {
                                 "type": "string",
-                                "description": "Order side (BUY or SELL)"
+                                "description": "Order side (BUY or SELL)",
                             },
                             "quantity": {
                                 "type": "number",
-                                "description": "Order quantity"
+                                "description": "Order quantity",
                             },
                             "order_type": {
                                 "type": "string",
                                 "description": "Order type (MARKET, LIMIT, etc.)",
-                                "default": "MARKET"
-                            }
+                                "default": "MARKET",
+                            },
                         },
-                        "required": ["symbol", "side", "quantity"]
-                    }
+                        "required": ["symbol", "side", "quantity"],
+                    },
                 ),
                 Tool(
                     name="set_leverage",
@@ -226,15 +254,15 @@ class BinanceMCPServer:
                         "properties": {
                             "symbol": {
                                 "type": "string",
-                                "description": "Trading pair symbol"
+                                "description": "Trading pair symbol",
                             },
                             "leverage": {
                                 "type": "integer",
-                                "description": "Leverage value (1-125)"
-                            }
+                                "description": "Leverage value (1-125)",
+                            },
                         },
-                        "required": ["symbol", "leverage"]
-                    }
+                        "required": ["symbol", "leverage"],
+                    },
                 ),
                 Tool(
                     name="place_stop_loss_order",
@@ -244,23 +272,23 @@ class BinanceMCPServer:
                         "properties": {
                             "symbol": {
                                 "type": "string",
-                                "description": "Trading pair symbol"
+                                "description": "Trading pair symbol",
                             },
                             "side": {
                                 "type": "string",
-                                "description": "Original position side (BUY or SELL)"
+                                "description": "Original position side (BUY or SELL)",
                             },
                             "quantity": {
                                 "type": "number",
-                                "description": "Order quantity"
+                                "description": "Order quantity",
                             },
                             "stop_price": {
                                 "type": "number",
-                                "description": "Stop price trigger"
-                            }
+                                "description": "Stop price trigger",
+                            },
                         },
-                        "required": ["symbol", "side", "quantity", "stop_price"]
-                    }
+                        "required": ["symbol", "side", "quantity", "stop_price"],
+                    },
                 ),
                 # PROFESSIONAL TECHNICAL ANALYSIS TOOLS
                 Tool(
@@ -271,22 +299,22 @@ class BinanceMCPServer:
                         "properties": {
                             "symbol": {
                                 "type": "string",
-                                "description": "Trading pair symbol (e.g., BTCUSDT)"
+                                "description": "Trading pair symbol (e.g., BTCUSDT)",
                             },
                             "timeframes": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "List of timeframes to analyze (e.g., ['1h', '4h', '1d'])",
-                                "default": ["1h", "4h", "1d"]
+                                "default": ["1h", "4h", "1d"],
                             },
                             "lookback_periods": {
                                 "type": "integer",
                                 "description": "Number of periods to look back for analysis",
-                                "default": 100
-                            }
+                                "default": 100,
+                            },
                         },
-                        "required": ["symbol"]
-                    }
+                        "required": ["symbol"],
+                    },
                 ),
                 Tool(
                     name="analyze_market_correlation",
@@ -296,27 +324,27 @@ class BinanceMCPServer:
                         "properties": {
                             "primary_symbol": {
                                 "type": "string",
-                                "description": "Primary trading pair to analyze (e.g., BTCUSDT)"
+                                "description": "Primary trading pair to analyze (e.g., BTCUSDT)",
                             },
                             "correlation_assets": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "Assets to correlate against",
-                                "default": ["ETHUSDT", "BNBUSDT", "SPY", "QQQ", "DXY"]
+                                "default": ["ETHUSDT", "BNBUSDT", "SPY", "QQQ", "DXY"],
                             },
                             "timeframe": {
                                 "type": "string",
                                 "description": "Timeframe for correlation analysis",
-                                "default": "1d"
+                                "default": "1d",
                             },
                             "periods": {
                                 "type": "integer",
                                 "description": "Number of periods for correlation calculation",
-                                "default": 30
-                            }
+                                "default": 30,
+                            },
                         },
-                        "required": ["primary_symbol"]
-                    }
+                        "required": ["primary_symbol"],
+                    },
                 ),
                 Tool(
                     name="get_multi_timeframe_data",
@@ -326,22 +354,22 @@ class BinanceMCPServer:
                         "properties": {
                             "symbol": {
                                 "type": "string",
-                                "description": "Trading pair symbol (e.g., BTCUSDT)"
+                                "description": "Trading pair symbol (e.g., BTCUSDT)",
                             },
                             "timeframes": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "List of timeframes to fetch",
-                                "default": ["1m", "5m", "15m", "1h", "4h", "1d"]
+                                "default": ["1m", "5m", "15m", "1h", "4h", "1d"],
                             },
                             "limit": {
                                 "type": "integer",
                                 "description": "Number of candles per timeframe",
-                                "default": 100
-                            }
+                                "default": 100,
+                            },
                         },
-                        "required": ["symbol"]
-                    }
+                        "required": ["symbol"],
+                    },
                 ),
                 Tool(
                     name="calculate_technical_indicators",
@@ -351,27 +379,27 @@ class BinanceMCPServer:
                         "properties": {
                             "symbol": {
                                 "type": "string",
-                                "description": "Trading pair symbol (e.g., BTCUSDT)"
+                                "description": "Trading pair symbol (e.g., BTCUSDT)",
                             },
                             "timeframe": {
                                 "type": "string",
                                 "description": "Timeframe for indicator calculation",
-                                "default": "1h"
+                                "default": "1h",
                             },
                             "indicators": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "List of indicators to calculate",
-                                "default": ["RSI", "MACD", "BB", "SMA", "EMA", "STOCH"]
+                                "default": ["RSI", "MACD", "BB", "SMA", "EMA", "STOCH"],
                             },
                             "periods": {
                                 "type": "integer",
                                 "description": "Number of periods for calculation",
-                                "default": 100
-                            }
+                                "default": 100,
+                            },
                         },
-                        "required": ["symbol"]
-                    }
+                        "required": ["symbol"],
+                    },
                 ),
                 Tool(
                     name="assess_market_sentiment",
@@ -381,31 +409,33 @@ class BinanceMCPServer:
                         "properties": {
                             "symbol": {
                                 "type": "string",
-                                "description": "Trading pair symbol (e.g., BTCUSDT)"
+                                "description": "Trading pair symbol (e.g., BTCUSDT)",
                             },
                             "include_fear_greed": {
                                 "type": "boolean",
                                 "description": "Include Fear & Greed index",
-                                "default": True
+                                "default": True,
                             },
                             "include_funding_rates": {
                                 "type": "boolean",
                                 "description": "Include funding rates analysis",
-                                "default": True
+                                "default": True,
                             },
                             "include_open_interest": {
                                 "type": "boolean",
                                 "description": "Include open interest analysis",
-                                "default": True
-                            }
+                                "default": True,
+                            },
                         },
-                        "required": ["symbol"]
-                    }
-                )
+                        "required": ["symbol"],
+                    },
+                ),
             ]
-        
+
         @self.server.call_tool()
-        async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+        async def handle_call_tool(
+            name: str, arguments: dict
+        ) -> list[types.TextContent]:
             """Handle MCP tool calls."""
             try:
                 if name == "get_24h_ticker":
@@ -419,73 +449,75 @@ class BinanceMCPServer:
                         arguments["symbol"],
                         arguments["side"],
                         arguments["quantity"],
-                        arguments.get("order_type", "MARKET")
+                        arguments.get("order_type", "MARKET"),
                     )
                 elif name == "set_leverage":
                     result = await self._set_leverage(
-                        arguments["symbol"],
-                        arguments["leverage"]
+                        arguments["symbol"], arguments["leverage"]
                     )
                 elif name == "place_stop_loss_order":
                     result = await self._place_stop_loss_order(
                         arguments["symbol"],
                         arguments["side"],
                         arguments["quantity"],
-                        arguments["stop_price"]
+                        arguments["stop_price"],
                     )
                 # TECHNICAL ANALYSIS TOOL HANDLERS
                 elif name == "calculate_support_resistance_levels":
                     result = await self._calculate_support_resistance_levels(
                         arguments["symbol"],
                         arguments.get("timeframes", ["1h", "4h", "1d"]),
-                        arguments.get("lookback_periods", 100)
+                        arguments.get("lookback_periods", 100),
                     )
                 elif name == "analyze_market_correlation":
                     result = await self._analyze_market_correlation(
                         arguments["primary_symbol"],
-                        arguments.get("correlation_assets", ["ETHUSDT", "BNBUSDT", "SPY", "QQQ", "DXY"]),
+                        arguments.get(
+                            "correlation_assets",
+                            ["ETHUSDT", "BNBUSDT", "SPY", "QQQ", "DXY"],
+                        ),
                         arguments.get("timeframe", "1d"),
-                        arguments.get("periods", 30)
+                        arguments.get("periods", 30),
                     )
                 elif name == "get_multi_timeframe_data":
                     result = await self._get_multi_timeframe_data(
                         arguments["symbol"],
-                        arguments.get("timeframes", ["1m", "5m", "15m", "1h", "4h", "1d"]),
-                        arguments.get("limit", 100)
+                        arguments.get(
+                            "timeframes", ["1m", "5m", "15m", "1h", "4h", "1d"]
+                        ),
+                        arguments.get("limit", 100),
                     )
                 elif name == "calculate_technical_indicators":
                     result = await self._calculate_technical_indicators(
                         arguments["symbol"],
                         arguments.get("timeframe", "1h"),
-                        arguments.get("indicators", ["RSI", "MACD", "BB", "SMA", "EMA", "STOCH"]),
-                        arguments.get("periods", 100)
+                        arguments.get(
+                            "indicators", ["RSI", "MACD", "BB", "SMA", "EMA", "STOCH"]
+                        ),
+                        arguments.get("periods", 100),
                     )
                 elif name == "assess_market_sentiment":
                     result = await self._assess_market_sentiment(
                         arguments["symbol"],
                         arguments.get("include_fear_greed", True),
                         arguments.get("include_funding_rates", True),
-                        arguments.get("include_open_interest", True)
+                        arguments.get("include_open_interest", True),
                     )
                 else:
                     result = {"error": f"Unknown tool: {name}"}
-                
-                return [types.TextContent(
-                    type="text",
-                    text=json.dumps(result, indent=2)
-                )]
-                
+
+                return [
+                    types.TextContent(type="text", text=json.dumps(result, indent=2))
+                ]
+
             except Exception as e:
-                error_result = {
-                    "error": str(e),
-                    "tool": name,
-                    "arguments": arguments
-                }
-                return [types.TextContent(
-                    type="text", 
-                    text=json.dumps(error_result, indent=2)
-                )]
-    
+                error_result = {"error": str(e), "tool": name, "arguments": arguments}
+                return [
+                    types.TextContent(
+                        type="text", text=json.dumps(error_result, indent=2)
+                    )
+                ]
+
     async def _get_24h_ticker(self, symbol: str) -> Dict:
         """Get 24h ticker data for a symbol."""
         try:
@@ -493,64 +525,55 @@ class BinanceMCPServer:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.base_url}/api/v3/ticker/24hr"
                 params = {"symbol": symbol}
-                
+
                 async with session.get(url, params=params) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return {
-                            "success": True,
-                            "data": data,
-                            "symbol": symbol
-                        }
+                        return {"success": True, "data": data, "symbol": symbol}
                     else:
                         return {
                             "success": False,
                             "error": f"HTTP {response.status}",
-                            "symbol": symbol
+                            "symbol": symbol,
                         }
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "symbol": symbol
-            }
-    
+            return {"success": False, "error": str(e), "symbol": symbol}
+
     async def _get_account_balance(self) -> Dict:
         """Get futures account balance."""
         try:
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 url = f"{self.futures_base_url}/fapi/v2/account"
-                
+
                 timestamp = self._get_timestamp()
                 query_string = f"timestamp={timestamp}"
                 signature = self._generate_signature(query_string)
-                
+
                 params = {"timestamp": timestamp, "signature": signature}
                 headers = {"X-MBX-APIKEY": self.api_key}
-                
+
                 async with session.get(url, params=params, headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
                         return {
                             "success": True,
                             "data": data,
-                            "totalWalletBalance": float(data.get("totalWalletBalance", 0)),
-                            "availableBalance": float(data.get("availableBalance", 0))
+                            "totalWalletBalance": float(
+                                data.get("totalWalletBalance", 0)
+                            ),
+                            "availableBalance": float(data.get("availableBalance", 0)),
                         }
                     else:
                         error_data = await response.json()
                         return {
                             "success": False,
                             "error": error_data,
-                            "status": response.status
+                            "status": response.status,
                         }
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
+            return {"success": False, "error": str(e)}
+
     async def _get_symbol_info(self, symbol: str) -> Dict:
         """Get symbol trading information."""
         try:
@@ -561,32 +584,30 @@ class BinanceMCPServer:
                 async with session.get(url) as response:
                     if response.status == 200:
                         data = await response.json()
-                        for symbol_info in data.get('symbols', []):
-                            if symbol_info['symbol'] == symbol:
+                        for symbol_info in data.get("symbols", []):
+                            if symbol_info["symbol"] == symbol:
                                 return {
                                     "success": True,
                                     "data": symbol_info,
-                                    "symbol": symbol
+                                    "symbol": symbol,
                                 }
                         return {
                             "success": False,
                             "error": f"Symbol {symbol} not found",
-                            "symbol": symbol
+                            "symbol": symbol,
                         }
                     else:
                         return {
                             "success": False,
                             "error": f"HTTP {response.status}",
-                            "symbol": symbol
+                            "symbol": symbol,
                         }
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "symbol": symbol
-            }
+            return {"success": False, "error": str(e), "symbol": symbol}
 
-    async def _place_futures_order(self, symbol: str, side: str, quantity: float, order_type: str = "MARKET") -> Dict:
+    async def _place_futures_order(
+        self, symbol: str, side: str, quantity: float, order_type: str = "MARKET"
+    ) -> Dict:
         """Place a futures order."""
         try:
             timeout = aiohttp.ClientTimeout(total=10)
@@ -600,8 +621,8 @@ class BinanceMCPServer:
                     "symbol": symbol,
                     "side": side,
                     "type": order_type,
-                    "quantity": f"{quantity:.8f}".rstrip('0').rstrip('.'),
-                    "timestamp": timestamp
+                    "quantity": f"{quantity:.8f}".rstrip("0").rstrip("."),
+                    "timestamp": timestamp,
                 }
 
                 # Create query string and signature
@@ -618,13 +639,13 @@ class BinanceMCPServer:
                         return {
                             "success": True,
                             "data": response_data,
-                            "orderId": response_data.get('orderId'),
-                            "status": response_data.get('status'),
-                            "executedQty": response_data.get('executedQty', 0),
-                            "avgPrice": response_data.get('avgPrice', 0),
+                            "orderId": response_data.get("orderId"),
+                            "status": response_data.get("status"),
+                            "executedQty": response_data.get("executedQty", 0),
+                            "avgPrice": response_data.get("avgPrice", 0),
                             "symbol": symbol,
                             "side": side,
-                            "quantity": quantity
+                            "quantity": quantity,
                         }
                     else:
                         return {
@@ -633,7 +654,7 @@ class BinanceMCPServer:
                             "status": response.status,
                             "symbol": symbol,
                             "side": side,
-                            "quantity": quantity
+                            "quantity": quantity,
                         }
 
         except Exception as e:
@@ -642,7 +663,7 @@ class BinanceMCPServer:
                 "error": str(e),
                 "symbol": symbol,
                 "side": side,
-                "quantity": quantity
+                "quantity": quantity,
             }
 
     async def _set_leverage(self, symbol: str, leverage: int) -> Dict:
@@ -656,7 +677,7 @@ class BinanceMCPServer:
                 params = {
                     "symbol": symbol,
                     "leverage": leverage,
-                    "timestamp": timestamp
+                    "timestamp": timestamp,
                 }
 
                 query_string = "&".join([f"{k}={v}" for k, v in params.items()])
@@ -673,7 +694,7 @@ class BinanceMCPServer:
                             "success": True,
                             "data": response_data,
                             "symbol": symbol,
-                            "leverage": leverage
+                            "leverage": leverage,
                         }
                     else:
                         return {
@@ -681,7 +702,7 @@ class BinanceMCPServer:
                             "error": response_data,
                             "status": response.status,
                             "symbol": symbol,
-                            "leverage": leverage
+                            "leverage": leverage,
                         }
 
         except Exception as e:
@@ -689,10 +710,12 @@ class BinanceMCPServer:
                 "success": False,
                 "error": str(e),
                 "symbol": symbol,
-                "leverage": leverage
+                "leverage": leverage,
             }
 
-    async def _place_stop_loss_order(self, symbol: str, side: str, quantity: float, stop_price: float) -> Dict:
+    async def _place_stop_loss_order(
+        self, symbol: str, side: str, quantity: float, stop_price: float
+    ) -> Dict:
         """Place a stop loss order."""
         try:
             timeout = aiohttp.ClientTimeout(total=10)
@@ -704,11 +727,13 @@ class BinanceMCPServer:
                 # Stop loss order parameters
                 params = {
                     "symbol": symbol,
-                    "side": "SELL" if side == "BUY" else "BUY",  # Opposite side for stop loss
+                    "side": "SELL"
+                    if side == "BUY"
+                    else "BUY",  # Opposite side for stop loss
                     "type": "STOP_MARKET",
-                    "quantity": f"{quantity:.8f}".rstrip('0').rstrip('.'),
+                    "quantity": f"{quantity:.8f}".rstrip("0").rstrip("."),
                     "stopPrice": f"{stop_price:.2f}",
-                    "timestamp": timestamp
+                    "timestamp": timestamp,
                 }
 
                 query_string = "&".join([f"{k}={v}" for k, v in params.items()])
@@ -724,11 +749,11 @@ class BinanceMCPServer:
                         return {
                             "success": True,
                             "data": response_data,
-                            "orderId": response_data.get('orderId'),
+                            "orderId": response_data.get("orderId"),
                             "symbol": symbol,
                             "side": params["side"],
                             "quantity": quantity,
-                            "stopPrice": stop_price
+                            "stopPrice": stop_price,
                         }
                     else:
                         return {
@@ -738,7 +763,7 @@ class BinanceMCPServer:
                             "symbol": symbol,
                             "side": params["side"],
                             "quantity": quantity,
-                            "stopPrice": stop_price
+                            "stopPrice": stop_price,
                         }
 
         except Exception as e:
@@ -748,30 +773,30 @@ class BinanceMCPServer:
                 "symbol": symbol,
                 "side": side,
                 "quantity": quantity,
-                "stopPrice": stop_price
+                "stopPrice": stop_price,
             }
 
     # ==================== TECHNICAL ANALYSIS METHODS ====================
 
-    async def _get_binance_klines(self, symbol: str, interval: str, limit: int = 100) -> Optional[pd.DataFrame]:
+    async def _get_binance_klines(
+        self, symbol: str, interval: str, limit: int = 100
+    ) -> Optional[pd.DataFrame]:
         """Fetch OHLCV data from Binance API with caching."""
         try:
             # Check cache first
             cache_key = f"{symbol}_{interval}_{limit}"
             current_time = time.time()
 
-            if (cache_key in self.price_cache and
-                cache_key in self.cache_expiry and
-                current_time < self.cache_expiry[cache_key]):
+            if (
+                cache_key in self.price_cache
+                and cache_key in self.cache_expiry
+                and current_time < self.cache_expiry[cache_key]
+            ):
                 logger.debug(f"📊 Using cached data for {cache_key}")
                 return self.price_cache[cache_key]
 
             url = "https://api.binance.com/api/v3/klines"
-            params = {
-                "symbol": symbol,
-                "interval": interval,
-                "limit": limit
-            }
+            params = {"symbol": symbol, "interval": interval, "limit": limit}
 
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -780,22 +805,38 @@ class BinanceMCPServer:
                         data = await response.json()
 
                         # Convert to DataFrame
-                        df = pd.DataFrame(data, columns=[
-                            'timestamp', 'open', 'high', 'low', 'close', 'volume',
-                            'close_time', 'quote_asset_volume', 'number_of_trades',
-                            'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
-                        ])
+                        df = pd.DataFrame(
+                            data,
+                            columns=[
+                                "timestamp",
+                                "open",
+                                "high",
+                                "low",
+                                "close",
+                                "volume",
+                                "close_time",
+                                "quote_asset_volume",
+                                "number_of_trades",
+                                "taker_buy_base_asset_volume",
+                                "taker_buy_quote_asset_volume",
+                                "ignore",
+                            ],
+                        )
 
                         # Convert to proper types
-                        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                        for col in ['open', 'high', 'low', 'close', 'volume']:
+                        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+                        for col in ["open", "high", "low", "close", "volume"]:
                             df[col] = pd.to_numeric(df[col])
 
                         # Cache the result
                         self.price_cache[cache_key] = df
-                        self.cache_expiry[cache_key] = current_time + self.cache_duration
+                        self.cache_expiry[cache_key] = (
+                            current_time + self.cache_duration
+                        )
 
-                        logger.info(f"📊 Fetched {len(df)} candles for {symbol} ({interval})")
+                        logger.info(
+                            f"📊 Fetched {len(df)} candles for {symbol} ({interval})"
+                        )
                         return df
                     else:
                         logger.error(f"❌ Binance API error: {response.status}")
@@ -805,7 +846,9 @@ class BinanceMCPServer:
             logger.error(f"❌ Error fetching Binance data: {str(e)}")
             return None
 
-    async def _calculate_support_resistance_levels(self, symbol: str, timeframes: List[str], lookback_periods: int) -> Dict[str, Any]:
+    async def _calculate_support_resistance_levels(
+        self, symbol: str, timeframes: List[str], lookback_periods: int
+    ) -> Dict[str, Any]:
         """Calculate multi-timeframe support and resistance levels."""
         try:
             logger.info(f"📊 Calculating S/R levels for {symbol} across {timeframes}")
@@ -815,7 +858,7 @@ class BinanceMCPServer:
                 "symbol": symbol,
                 "timeframes": {},
                 "consolidated_levels": [],
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
             all_levels = []
@@ -840,22 +883,26 @@ class BinanceMCPServer:
                     "pivot_points": pivot_levels,
                     "fibonacci_levels": fib_levels,
                     "volume_profile": volume_levels,
-                    "current_price": float(df['close'].iloc[-1])
+                    "current_price": float(df["close"].iloc[-1]),
                 }
 
                 results["timeframes"][timeframe] = timeframe_levels
 
                 # Add to consolidated levels with weights
-                weight = {"1m": 1, "5m": 2, "15m": 3, "1h": 4, "4h": 5, "1d": 6}.get(timeframe, 3)
+                weight = {"1m": 1, "5m": 2, "15m": 3, "1h": 4, "4h": 5, "1d": 6}.get(
+                    timeframe, 3
+                )
                 for level_type, levels in timeframe_levels.items():
                     if isinstance(levels, list):
                         for level in levels:
-                            all_levels.append({
-                                "price": level,
-                                "type": level_type,
-                                "timeframe": timeframe,
-                                "weight": weight
-                            })
+                            all_levels.append(
+                                {
+                                    "price": level,
+                                    "type": level_type,
+                                    "timeframe": timeframe,
+                                    "weight": weight,
+                                }
+                            )
 
             # Consolidate levels by clustering nearby prices
             results["consolidated_levels"] = self._consolidate_levels(all_levels)
@@ -868,15 +915,15 @@ class BinanceMCPServer:
                 "success": False,
                 "error": str(e),
                 "symbol": symbol,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
     def _calculate_pivot_points(self, df: pd.DataFrame) -> List[float]:
         """Calculate pivot points from OHLC data."""
         try:
-            high = df['high'].iloc[-1]
-            low = df['low'].iloc[-1]
-            close = df['close'].iloc[-1]
+            high = df["high"].iloc[-1]
+            low = df["low"].iloc[-1]
+            close = df["close"].iloc[-1]
 
             # Standard pivot point
             pivot = (high + low + close) / 3
@@ -899,11 +946,11 @@ class BinanceMCPServer:
         """Calculate Fibonacci retracement levels."""
         try:
             # Find recent swing high and low
-            high_idx = df['high'].rolling(window=20).max().idxmax()
-            low_idx = df['low'].rolling(window=20).min().idxmin()
+            high_idx = df["high"].rolling(window=20).max().idxmax()
+            low_idx = df["low"].rolling(window=20).min().idxmin()
 
-            swing_high = df.loc[high_idx, 'high']
-            swing_low = df.loc[low_idx, 'low']
+            swing_high = df.loc[high_idx, "high"]
+            swing_low = df.loc[low_idx, "low"]
 
             # Fibonacci ratios
             fib_ratios = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
@@ -926,7 +973,7 @@ class BinanceMCPServer:
         """Calculate volume profile levels."""
         try:
             # Create price bins
-            price_range = df['high'].max() - df['low'].min()
+            price_range = df["high"].max() - df["low"].min()
             num_bins = 20
             bin_size = price_range / num_bins
 
@@ -935,22 +982,24 @@ class BinanceMCPServer:
 
             for _, row in df.iterrows():
                 # Distribute volume across the price range of the candle
-                candle_range = row['high'] - row['low']
+                candle_range = row["high"] - row["low"]
                 if candle_range > 0:
-                    volume_per_price = row['volume'] / candle_range
+                    volume_per_price = row["volume"] / candle_range
 
                     # Add volume to each price bin this candle touches
-                    start_bin = int((row['low'] - df['low'].min()) / bin_size)
-                    end_bin = int((row['high'] - df['low'].min()) / bin_size)
+                    start_bin = int((row["low"] - df["low"].min()) / bin_size)
+                    end_bin = int((row["high"] - df["low"].min()) / bin_size)
 
                     for bin_idx in range(start_bin, end_bin + 1):
-                        price_level = df['low'].min() + (bin_idx * bin_size)
+                        price_level = df["low"].min() + (bin_idx * bin_size)
                         if price_level not in volume_profile:
                             volume_profile[price_level] = 0
                         volume_profile[price_level] += volume_per_price
 
             # Get top volume levels
-            sorted_levels = sorted(volume_profile.items(), key=lambda x: x[1], reverse=True)
+            sorted_levels = sorted(
+                volume_profile.items(), key=lambda x: x[1], reverse=True
+            )
             top_levels = [float(level[0]) for level in sorted_levels[:10]]
 
             return top_levels
@@ -966,15 +1015,17 @@ class BinanceMCPServer:
                 return []
 
             # Sort by price
-            sorted_levels = sorted(all_levels, key=lambda x: x['price'])
+            sorted_levels = sorted(all_levels, key=lambda x: x["price"])
 
             consolidated = []
             current_cluster = [sorted_levels[0]]
 
             for level in sorted_levels[1:]:
                 # If price is within 0.5% of the current cluster, add to cluster
-                cluster_avg = sum(l['price'] for l in current_cluster) / len(current_cluster)
-                if abs(level['price'] - cluster_avg) / cluster_avg < 0.005:
+                cluster_avg = sum(l["price"] for l in current_cluster) / len(
+                    current_cluster
+                )
+                if abs(level["price"] - cluster_avg) / cluster_avg < 0.005:
                     current_cluster.append(level)
                 else:
                     # Finalize current cluster
@@ -987,7 +1038,7 @@ class BinanceMCPServer:
                 consolidated.append(self._finalize_cluster(current_cluster))
 
             # Sort by strength (weight)
-            consolidated.sort(key=lambda x: x['strength'], reverse=True)
+            consolidated.sort(key=lambda x: x["strength"], reverse=True)
 
             return consolidated[:15]  # Return top 15 levels
 
@@ -997,12 +1048,12 @@ class BinanceMCPServer:
 
     def _finalize_cluster(self, cluster: List[Dict]) -> Dict:
         """Finalize a cluster of support/resistance levels."""
-        avg_price = sum(l['price'] for l in cluster) / len(cluster)
-        total_weight = sum(l['weight'] for l in cluster)
+        avg_price = sum(l["price"] for l in cluster) / len(cluster)
+        total_weight = sum(l["weight"] for l in cluster)
 
         # Determine if it's support or resistance based on current price context
-        level_types = [l['type'] for l in cluster]
-        timeframes = list(set(l['timeframe'] for l in cluster))
+        level_types = [l["type"] for l in cluster]
+        timeframes = list(set(l["timeframe"] for l in cluster))
 
         return {
             "price": round(avg_price, 8),
@@ -1010,14 +1061,21 @@ class BinanceMCPServer:
             "count": len(cluster),
             "types": level_types,
             "timeframes": timeframes,
-            "confidence": min(100, total_weight * 10)  # Scale to 0-100
+            "confidence": min(100, total_weight * 10),  # Scale to 0-100
         }
 
-    async def _analyze_market_correlation(self, primary_symbol: str, correlation_assets: List[str],
-                                        timeframe: str, periods: int) -> Dict[str, Any]:
+    async def _analyze_market_correlation(
+        self,
+        primary_symbol: str,
+        correlation_assets: List[str],
+        timeframe: str,
+        periods: int,
+    ) -> Dict[str, Any]:
         """Analyze market correlation across multiple assets."""
         try:
-            logger.info(f"📈 Analyzing correlation for {primary_symbol} vs {correlation_assets}")
+            logger.info(
+                f"📈 Analyzing correlation for {primary_symbol} vs {correlation_assets}"
+            )
 
             results = {
                 "success": True,
@@ -1026,15 +1084,17 @@ class BinanceMCPServer:
                 "periods": periods,
                 "correlations": {},
                 "market_regime": "UNKNOWN",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
             # Get primary asset data
-            primary_df = await self._get_binance_klines(primary_symbol, timeframe, periods)
+            primary_df = await self._get_binance_klines(
+                primary_symbol, timeframe, periods
+            )
             if primary_df is None:
                 raise Exception(f"Failed to fetch data for {primary_symbol}")
 
-            primary_returns = primary_df['close'].pct_change().dropna()
+            primary_returns = primary_df["close"].pct_change().dropna()
 
             correlations = []
 
@@ -1043,15 +1103,19 @@ class BinanceMCPServer:
                     # Handle different asset types
                     if asset.endswith("USDT"):
                         # Crypto asset - use Binance
-                        asset_df = await self._get_binance_klines(asset, timeframe, periods)
+                        asset_df = await self._get_binance_klines(
+                            asset, timeframe, periods
+                        )
                         if asset_df is not None:
-                            asset_returns = asset_df['close'].pct_change().dropna()
+                            asset_returns = asset_df["close"].pct_change().dropna()
                         else:
                             continue
                     else:
                         # Traditional asset - use yfinance if available
                         if MARKET_DATA_AVAILABLE:
-                            asset_data = await self._get_traditional_asset_data(asset, periods)
+                            asset_data = await self._get_traditional_asset_data(
+                                asset, periods
+                            )
                             if asset_data is not None:
                                 asset_returns = asset_data.pct_change().dropna()
                             else:
@@ -1065,19 +1129,25 @@ class BinanceMCPServer:
                         min_length = min(len(primary_returns), len(asset_returns))
                         correlation = np.corrcoef(
                             primary_returns.tail(min_length),
-                            asset_returns.tail(min_length)
+                            asset_returns.tail(min_length),
                         )[0, 1]
 
                         if not np.isnan(correlation):
                             correlations.append(correlation)
                             results["correlations"][asset] = {
                                 "correlation": round(float(correlation), 4),
-                                "strength": self._interpret_correlation_strength(correlation),
-                                "direction": "positive" if correlation > 0 else "negative"
+                                "strength": self._interpret_correlation_strength(
+                                    correlation
+                                ),
+                                "direction": "positive"
+                                if correlation > 0
+                                else "negative",
                             }
 
                 except Exception as e:
-                    logger.warning(f"⚠️  Failed to analyze correlation with {asset}: {str(e)}")
+                    logger.warning(
+                        f"⚠️  Failed to analyze correlation with {asset}: {str(e)}"
+                    )
                     continue
 
             # Determine market regime
@@ -1098,7 +1168,7 @@ class BinanceMCPServer:
                 "success": False,
                 "error": str(e),
                 "primary_symbol": primary_symbol,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
     def _interpret_correlation_strength(self, correlation: float) -> str:
@@ -1115,7 +1185,9 @@ class BinanceMCPServer:
         else:
             return "VERY_WEAK"
 
-    async def _get_traditional_asset_data(self, symbol: str, periods: int) -> Optional[pd.Series]:
+    async def _get_traditional_asset_data(
+        self, symbol: str, periods: int
+    ) -> Optional[pd.Series]:
         """Get traditional asset data using yfinance."""
         try:
             if not MARKET_DATA_AVAILABLE:
@@ -1127,7 +1199,7 @@ class BinanceMCPServer:
                 "QQQ": "QQQ",
                 "DXY": "DX-Y.NYB",
                 "GOLD": "GC=F",
-                "OIL": "CL=F"
+                "OIL": "CL=F",
             }
 
             yf_symbol = symbol_map.get(symbol, symbol)
@@ -1136,15 +1208,19 @@ class BinanceMCPServer:
             # Get historical data
             hist = ticker.history(period=f"{periods}d")
             if not hist.empty:
-                return hist['Close']
+                return hist["Close"]
 
             return None
 
         except Exception as e:
-            logger.error(f"❌ Error fetching traditional asset data for {symbol}: {str(e)}")
+            logger.error(
+                f"❌ Error fetching traditional asset data for {symbol}: {str(e)}"
+            )
             return None
 
-    async def _get_multi_timeframe_data(self, symbol: str, timeframes: List[str], limit: int) -> Dict[str, Any]:
+    async def _get_multi_timeframe_data(
+        self, symbol: str, timeframes: List[str], limit: int
+    ) -> Dict[str, Any]:
         """Get real multi-timeframe OHLCV data."""
         try:
             logger.info(f"📊 Fetching multi-timeframe data for {symbol}: {timeframes}")
@@ -1153,7 +1229,7 @@ class BinanceMCPServer:
                 "success": True,
                 "symbol": symbol,
                 "timeframes": {},
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
             for timeframe in timeframes:
@@ -1161,18 +1237,30 @@ class BinanceMCPServer:
                 if df is not None:
                     # Convert DataFrame to dict for JSON serialization
                     timeframe_data = {
-                        "candles": df.tail(limit).to_dict('records'),
-                        "current_price": float(df['close'].iloc[-1]),
-                        "24h_change": float((df['close'].iloc[-1] - df['close'].iloc[-25]) / df['close'].iloc[-25] * 100) if len(df) >= 25 else 0,
-                        "volume_24h": float(df['volume'].tail(24).sum()) if len(df) >= 24 else float(df['volume'].sum()),
-                        "high_24h": float(df['high'].tail(24).max()) if len(df) >= 24 else float(df['high'].max()),
-                        "low_24h": float(df['low'].tail(24).min()) if len(df) >= 24 else float(df['low'].min())
+                        "candles": df.tail(limit).to_dict("records"),
+                        "current_price": float(df["close"].iloc[-1]),
+                        "24h_change": float(
+                            (df["close"].iloc[-1] - df["close"].iloc[-25])
+                            / df["close"].iloc[-25]
+                            * 100
+                        )
+                        if len(df) >= 25
+                        else 0,
+                        "volume_24h": float(df["volume"].tail(24).sum())
+                        if len(df) >= 24
+                        else float(df["volume"].sum()),
+                        "high_24h": float(df["high"].tail(24).max())
+                        if len(df) >= 24
+                        else float(df["high"].max()),
+                        "low_24h": float(df["low"].tail(24).min())
+                        if len(df) >= 24
+                        else float(df["low"].min()),
                     }
 
                     # Convert timestamps to ISO format
                     for candle in timeframe_data["candles"]:
-                        if 'timestamp' in candle:
-                            candle['timestamp'] = candle['timestamp'].isoformat()
+                        if "timestamp" in candle:
+                            candle["timestamp"] = candle["timestamp"].isoformat()
 
                     results["timeframes"][timeframe] = timeframe_data
                 else:
@@ -1186,14 +1274,17 @@ class BinanceMCPServer:
                 "success": False,
                 "error": str(e),
                 "symbol": symbol,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
-    async def _calculate_technical_indicators(self, symbol: str, timeframe: str,
-                                            indicators: List[str], periods: int) -> Dict[str, Any]:
+    async def _calculate_technical_indicators(
+        self, symbol: str, timeframe: str, indicators: List[str], periods: int
+    ) -> Dict[str, Any]:
         """Calculate professional technical indicators."""
         try:
-            logger.info(f"📊 Calculating technical indicators for {symbol} ({timeframe}): {indicators}")
+            logger.info(
+                f"📊 Calculating technical indicators for {symbol} ({timeframe}): {indicators}"
+            )
 
             results = {
                 "success": True,
@@ -1201,7 +1292,7 @@ class BinanceMCPServer:
                 "timeframe": timeframe,
                 "indicators": {},
                 "signals": {},
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
             # Get OHLCV data
@@ -1221,7 +1312,11 @@ class BinanceMCPServer:
                                 "values": rsi_values.tail(20).tolist(),
                                 "overbought": current_rsi > 70,
                                 "oversold": current_rsi < 30,
-                                "signal": "BUY" if current_rsi < 30 else "SELL" if current_rsi > 70 else "NEUTRAL"
+                                "signal": "BUY"
+                                if current_rsi < 30
+                                else "SELL"
+                                if current_rsi > 70
+                                else "NEUTRAL",
                             }
 
                     elif indicator.upper() == "MACD":
@@ -1237,8 +1332,12 @@ class BinanceMCPServer:
                     elif indicator.upper() in ["SMA", "EMA"]:
                         ma_data = self._calculate_moving_averages(df, indicator.upper())
                         if ma_data is not None:
-                            results["indicators"][f"{indicator.upper()}_20"] = ma_data["20"]
-                            results["indicators"][f"{indicator.upper()}_50"] = ma_data["50"]
+                            results["indicators"][f"{indicator.upper()}_20"] = ma_data[
+                                "20"
+                            ]
+                            results["indicators"][f"{indicator.upper()}_50"] = ma_data[
+                                "50"
+                            ]
 
                     elif indicator.upper() == "STOCH":
                         stoch_data = self._calculate_stochastic(df)
@@ -1250,7 +1349,9 @@ class BinanceMCPServer:
                     continue
 
             # Generate overall signal
-            results["signals"]["overall"] = self._generate_overall_signal(results["indicators"])
+            results["signals"]["overall"] = self._generate_overall_signal(
+                results["indicators"]
+            )
 
             return results
 
@@ -1260,17 +1361,19 @@ class BinanceMCPServer:
                 "success": False,
                 "error": str(e),
                 "symbol": symbol,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
     def _calculate_rsi(self, df: pd.DataFrame, period: int = 14) -> Optional[pd.Series]:
         """Calculate RSI using TA-Lib or manual calculation."""
         try:
             if TALIB_AVAILABLE:
-                return pd.Series(talib.RSI(df['close'].values, timeperiod=period), index=df.index)
+                return pd.Series(
+                    talib.RSI(df["close"].values, timeperiod=period), index=df.index
+                )
             else:
                 # Manual RSI calculation
-                delta = df['close'].diff()
+                delta = df["close"].diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
                 loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
                 rs = gain / loss
@@ -1283,14 +1386,18 @@ class BinanceMCPServer:
         """Calculate MACD indicator using TA-Lib or manual calculation."""
         try:
             if TALIB_AVAILABLE:
-                macd, macd_signal, macd_hist = talib.MACD(df['close'].values)
+                macd, macd_signal, macd_hist = talib.MACD(df["close"].values)
                 current_macd = float(macd[-1]) if not np.isnan(macd[-1]) else 0
-                current_signal = float(macd_signal[-1]) if not np.isnan(macd_signal[-1]) else 0
-                current_hist = float(macd_hist[-1]) if not np.isnan(macd_hist[-1]) else 0
+                current_signal = (
+                    float(macd_signal[-1]) if not np.isnan(macd_signal[-1]) else 0
+                )
+                current_hist = (
+                    float(macd_hist[-1]) if not np.isnan(macd_hist[-1]) else 0
+                )
             else:
                 # Manual MACD calculation
-                ema12 = df['close'].ewm(span=12).mean()
-                ema26 = df['close'].ewm(span=26).mean()
+                ema12 = df["close"].ewm(span=12).mean()
+                ema26 = df["close"].ewm(span=26).mean()
                 macd_line = ema12 - ema26
                 signal_line = macd_line.ewm(span=9).mean()
                 histogram = macd_line - signal_line
@@ -1305,25 +1412,32 @@ class BinanceMCPServer:
                 "histogram": current_hist,
                 "bullish_crossover": current_macd > current_signal and current_hist > 0,
                 "bearish_crossover": current_macd < current_signal and current_hist < 0,
-                "signal_type": "BUY" if current_macd > current_signal else "SELL"
+                "signal_type": "BUY" if current_macd > current_signal else "SELL",
             }
 
         except Exception as e:
             logger.error(f"❌ Error calculating MACD: {str(e)}")
             return None
 
-    def _calculate_bollinger_bands(self, df: pd.DataFrame, period: int = 20, std_dev: int = 2) -> Optional[Dict]:
+    def _calculate_bollinger_bands(
+        self, df: pd.DataFrame, period: int = 20, std_dev: int = 2
+    ) -> Optional[Dict]:
         """Calculate Bollinger Bands."""
         try:
             if TALIB_AVAILABLE:
-                upper, middle, lower = talib.BBANDS(df['close'].values, timeperiod=period, nbdevup=std_dev, nbdevdn=std_dev)
+                upper, middle, lower = talib.BBANDS(
+                    df["close"].values,
+                    timeperiod=period,
+                    nbdevup=std_dev,
+                    nbdevdn=std_dev,
+                )
                 current_upper = float(upper[-1])
                 current_middle = float(middle[-1])
                 current_lower = float(lower[-1])
             else:
                 # Manual calculation
-                sma = df['close'].rolling(window=period).mean()
-                std = df['close'].rolling(window=period).std()
+                sma = df["close"].rolling(window=period).mean()
+                std = df["close"].rolling(window=period).std()
                 upper = sma + (std * std_dev)
                 lower = sma - (std * std_dev)
 
@@ -1331,8 +1445,10 @@ class BinanceMCPServer:
                 current_middle = float(sma.iloc[-1])
                 current_lower = float(lower.iloc[-1])
 
-            current_price = float(df['close'].iloc[-1])
-            bb_position = (current_price - current_lower) / (current_upper - current_lower)
+            current_price = float(df["close"].iloc[-1])
+            bb_position = (current_price - current_lower) / (
+                current_upper - current_lower
+            )
 
             return {
                 "upper": current_upper,
@@ -1341,14 +1457,20 @@ class BinanceMCPServer:
                 "current_price": current_price,
                 "bb_position": bb_position,
                 "squeeze": (current_upper - current_lower) / current_middle < 0.1,
-                "signal": "SELL" if current_price > current_upper else "BUY" if current_price < current_lower else "NEUTRAL"
+                "signal": "SELL"
+                if current_price > current_upper
+                else "BUY"
+                if current_price < current_lower
+                else "NEUTRAL",
             }
 
         except Exception as e:
             logger.error(f"❌ Error calculating Bollinger Bands: {str(e)}")
             return None
 
-    def _calculate_moving_averages(self, df: pd.DataFrame, ma_type: str) -> Optional[Dict]:
+    def _calculate_moving_averages(
+        self, df: pd.DataFrame, ma_type: str
+    ) -> Optional[Dict]:
         """Calculate moving averages (SMA or EMA)."""
         try:
             results = {}
@@ -1357,27 +1479,31 @@ class BinanceMCPServer:
             for period in periods:
                 if ma_type == "SMA":
                     if TALIB_AVAILABLE:
-                        ma_values = talib.SMA(df['close'].values, timeperiod=period)
-                        current_ma = float(ma_values[-1]) if not np.isnan(ma_values[-1]) else 0
+                        ma_values = talib.SMA(df["close"].values, timeperiod=period)
+                        current_ma = (
+                            float(ma_values[-1]) if not np.isnan(ma_values[-1]) else 0
+                        )
                     else:
-                        ma_series = df['close'].rolling(window=period).mean()
+                        ma_series = df["close"].rolling(window=period).mean()
                         current_ma = float(ma_series.iloc[-1])
                 else:  # EMA
                     if TALIB_AVAILABLE:
-                        ma_values = talib.EMA(df['close'].values, timeperiod=period)
-                        current_ma = float(ma_values[-1]) if not np.isnan(ma_values[-1]) else 0
+                        ma_values = talib.EMA(df["close"].values, timeperiod=period)
+                        current_ma = (
+                            float(ma_values[-1]) if not np.isnan(ma_values[-1]) else 0
+                        )
                     else:
-                        ma_series = df['close'].ewm(span=period).mean()
+                        ma_series = df["close"].ewm(span=period).mean()
                         current_ma = float(ma_series.iloc[-1])
 
-                current_price = float(df['close'].iloc[-1])
+                current_price = float(df["close"].iloc[-1])
 
                 results[str(period)] = {
                     "value": current_ma,
                     "current_price": current_price,
                     "above_ma": current_price > current_ma,
                     "distance_pct": ((current_price - current_ma) / current_ma) * 100,
-                    "signal": "BUY" if current_price > current_ma else "SELL"
+                    "signal": "BUY" if current_price > current_ma else "SELL",
                 }
 
             return results
@@ -1386,19 +1512,29 @@ class BinanceMCPServer:
             logger.error(f"❌ Error calculating {ma_type}: {str(e)}")
             return None
 
-    def _calculate_stochastic(self, df: pd.DataFrame, k_period: int = 14, d_period: int = 3) -> Optional[Dict]:
+    def _calculate_stochastic(
+        self, df: pd.DataFrame, k_period: int = 14, d_period: int = 3
+    ) -> Optional[Dict]:
         """Calculate Stochastic oscillator."""
         try:
             if TALIB_AVAILABLE:
-                slowk, slowd = talib.STOCH(df['high'].values, df['low'].values, df['close'].values,
-                                         fastk_period=k_period, slowk_period=d_period, slowd_period=d_period)
+                slowk, slowd = talib.STOCH(
+                    df["high"].values,
+                    df["low"].values,
+                    df["close"].values,
+                    fastk_period=k_period,
+                    slowk_period=d_period,
+                    slowd_period=d_period,
+                )
                 current_k = float(slowk[-1]) if not np.isnan(slowk[-1]) else 0
                 current_d = float(slowd[-1]) if not np.isnan(slowd[-1]) else 0
             else:
                 # Manual calculation
-                lowest_low = df['low'].rolling(window=k_period).min()
-                highest_high = df['high'].rolling(window=k_period).max()
-                k_percent = 100 * ((df['close'] - lowest_low) / (highest_high - lowest_low))
+                lowest_low = df["low"].rolling(window=k_period).min()
+                highest_high = df["high"].rolling(window=k_period).max()
+                k_percent = 100 * (
+                    (df["close"] - lowest_low) / (highest_high - lowest_low)
+                )
                 d_percent = k_percent.rolling(window=d_period).mean()
 
                 current_k = float(k_percent.iloc[-1])
@@ -1410,7 +1546,11 @@ class BinanceMCPServer:
                 "overbought": current_k > 80 and current_d > 80,
                 "oversold": current_k < 20 and current_d < 20,
                 "bullish_crossover": current_k > current_d,
-                "signal": "BUY" if current_k < 20 and current_d < 20 else "SELL" if current_k > 80 and current_d > 80 else "NEUTRAL"
+                "signal": "BUY"
+                if current_k < 20 and current_d < 20
+                else "SELL"
+                if current_k > 80 and current_d > 80
+                else "NEUTRAL",
             }
 
         except Exception as e:
@@ -1424,15 +1564,15 @@ class BinanceMCPServer:
 
             # Collect individual signals
             for indicator, data in indicators.items():
-                if isinstance(data, dict) and 'signal' in data:
-                    signals.append(data['signal'])
-                elif isinstance(data, dict) and 'signal_type' in data:
-                    signals.append(data['signal_type'])
+                if isinstance(data, dict) and "signal" in data:
+                    signals.append(data["signal"])
+                elif isinstance(data, dict) and "signal_type" in data:
+                    signals.append(data["signal_type"])
 
             # Count signals
-            buy_signals = signals.count('BUY')
-            sell_signals = signals.count('SELL')
-            neutral_signals = signals.count('NEUTRAL')
+            buy_signals = signals.count("BUY")
+            sell_signals = signals.count("SELL")
+            neutral_signals = signals.count("NEUTRAL")
 
             total_signals = len(signals)
             if total_signals == 0:
@@ -1465,16 +1605,21 @@ class BinanceMCPServer:
                     "buy_signals": buy_signals,
                     "sell_signals": sell_signals,
                     "neutral_signals": neutral_signals,
-                    "total_signals": total_signals
-                }
+                    "total_signals": total_signals,
+                },
             }
 
         except Exception as e:
             logger.error(f"❌ Error generating overall signal: {str(e)}")
             return {"signal": "NEUTRAL", "confidence": 0, "breakdown": {}}
 
-    async def _assess_market_sentiment(self, symbol: str, include_fear_greed: bool,
-                                     include_funding_rates: bool, include_open_interest: bool) -> Dict[str, Any]:
+    async def _assess_market_sentiment(
+        self,
+        symbol: str,
+        include_fear_greed: bool,
+        include_funding_rates: bool,
+        include_open_interest: bool,
+    ) -> Dict[str, Any]:
         """Assess market sentiment using multiple indicators."""
         try:
             logger.info(f"😱 Assessing market sentiment for {symbol}")
@@ -1485,7 +1630,7 @@ class BinanceMCPServer:
                 "sentiment_score": 50,  # Neutral baseline
                 "sentiment_level": "NEUTRAL",
                 "components": {},
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
             sentiment_scores = []
@@ -1503,7 +1648,9 @@ class BinanceMCPServer:
                 if funding_data:
                     results["components"]["funding_rates"] = funding_data
                     # Convert funding rate to sentiment score (0-100)
-                    funding_sentiment = 50 + (funding_data["funding_rate"] * 10000)  # Scale funding rate
+                    funding_sentiment = 50 + (
+                        funding_data["funding_rate"] * 10000
+                    )  # Scale funding rate
                     funding_sentiment = max(0, min(100, funding_sentiment))
                     sentiment_scores.append(funding_sentiment)
 
@@ -1519,7 +1666,9 @@ class BinanceMCPServer:
 
             # Calculate overall sentiment
             if sentiment_scores:
-                results["sentiment_score"] = round(sum(sentiment_scores) / len(sentiment_scores), 1)
+                results["sentiment_score"] = round(
+                    sum(sentiment_scores) / len(sentiment_scores), 1
+                )
 
             # Determine sentiment level
             score = results["sentiment_score"]
@@ -1546,7 +1695,7 @@ class BinanceMCPServer:
                 "success": False,
                 "error": str(e),
                 "symbol": symbol,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
     async def _get_fear_greed_index(self) -> Optional[Dict]:
@@ -1561,12 +1710,12 @@ class BinanceMCPServer:
                 async with session.get(url) as response:
                     if response.status == 200:
                         data = await response.json()
-                        if data and 'data' in data and len(data['data']) > 0:
-                            fng_data = data['data'][0]
+                        if data and "data" in data and len(data["data"]) > 0:
+                            fng_data = data["data"][0]
                             return {
-                                "value": int(fng_data['value']),
-                                "classification": fng_data['value_classification'],
-                                "timestamp": fng_data['timestamp']
+                                "value": int(fng_data["value"]),
+                                "classification": fng_data["value_classification"],
+                                "timestamp": fng_data["timestamp"],
                             }
             return None
 
@@ -1588,9 +1737,9 @@ class BinanceMCPServer:
                         if data and len(data) > 0:
                             latest = data[0]
                             return {
-                                "funding_rate": float(latest['fundingRate']),
-                                "funding_time": latest['fundingTime'],
-                                "mark_price": float(latest.get('markPrice', 0))
+                                "funding_rate": float(latest["fundingRate"]),
+                                "funding_time": latest["fundingTime"],
+                                "mark_price": float(latest.get("markPrice", 0)),
                             }
             return None
 
@@ -1610,22 +1759,26 @@ class BinanceMCPServer:
                     if response.status == 200:
                         data = await response.json()
                         if data:
-                            current_oi = float(data['openInterest'])
+                            current_oi = float(data["openInterest"])
 
                             # Get historical OI for comparison
-                            hist_url = f"{self.futures_base_url}/futures/data/openInterestHist"
-                            hist_params = {
-                                "symbol": symbol,
-                                "period": "1d",
-                                "limit": 2
-                            }
+                            hist_url = (
+                                f"{self.futures_base_url}/futures/data/openInterestHist"
+                            )
+                            hist_params = {"symbol": symbol, "period": "1d", "limit": 2}
 
-                            async with session.get(hist_url, params=hist_params) as hist_response:
+                            async with session.get(
+                                hist_url, params=hist_params
+                            ) as hist_response:
                                 if hist_response.status == 200:
                                     hist_data = await hist_response.json()
                                     if len(hist_data) >= 2:
-                                        prev_oi = float(hist_data[-2]['sumOpenInterest'])
-                                        change_24h = ((current_oi - prev_oi) / prev_oi) * 100
+                                        prev_oi = float(
+                                            hist_data[-2]["sumOpenInterest"]
+                                        )
+                                        change_24h = (
+                                            (current_oi - prev_oi) / prev_oi
+                                        ) * 100
                                     else:
                                         change_24h = 0
                                 else:
@@ -1634,7 +1787,7 @@ class BinanceMCPServer:
                             return {
                                 "open_interest": current_oi,
                                 "change_24h": change_24h,
-                                "timestamp": data.get('time', int(time.time() * 1000))
+                                "timestamp": data.get("time", int(time.time() * 1000)),
                             }
             return None
 
@@ -1663,10 +1816,11 @@ async def main():
                 server_version="1.0.0",
                 capabilities=server_instance.server.get_capabilities(
                     notification_options=NotificationOptions(),
-                    experimental_capabilities={}
-                )
-            )
+                    experimental_capabilities={},
+                ),
+            ),
         )
+
 
 if __name__ == "__main__":
     asyncio.run(main())
