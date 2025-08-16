@@ -1,0 +1,25 @@
+# FluxTrader Terraform Configuration Example
+# Copy this file to terraform.tfvars and update with your values
+
+# Environment configuration
+environment = "staging"  # or "production"
+
+# AWS configuration
+aws_region = "us-east-1"
+
+# EC2 configuration
+instance_type = "t3.medium"  # t3.micro, t3.small, t3.medium, t3.large, t3.xlarge
+key_pair_name = "your-ec2-key-pair-name"
+
+# RDS configuration
+rds_instance_class = "db.t3.micro"  # db.t3.micro, db.t3.small, db.t3.medium, db.t3.large
+db_master_password = "your-secure-database-password"
+
+# Security configuration
+allowed_cidr = "0.0.0.0/0"  # Restrict this to your IP range for better security
+
+# Example production configuration:
+# environment = "production"
+# instance_type = "t3.large"
+# rds_instance_class = "db.t3.small"
+# allowed_cidr = "10.0.0.0/8"  # More restrictive for production

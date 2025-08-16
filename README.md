@@ -250,12 +250,46 @@ python utils/test_runner.py --integration
 - **Audit Logging**: Complete trading activity logs
 - **Access Controls**: Secure configuration management
 
+## ☁️ AWS Deployment
+
+FluxTrader includes comprehensive AWS integration with automated infrastructure provisioning and secure secret management.
+
+### Quick AWS Setup
+```bash
+# 1. Deploy infrastructure (5-10 minutes)
+chmod +x scripts/deploy-infrastructure.sh
+./scripts/deploy-infrastructure.sh \
+  --environment staging \
+  --tool cloudformation \
+  --key-pair your-ec2-key-pair \
+  --password your-secure-password
+
+# 2. Configure GitHub secrets and trigger deployment
+# See Quick Start Guide for details
+```
+
+### AWS Features
+- **🏗️ Infrastructure as Code**: CloudFormation and Terraform templates
+- **🔐 Secrets Management**: AWS Secrets Manager integration
+- **🚀 Auto-scaling**: EC2 instances with load balancing (production)
+- **🗄️ Managed Database**: RDS PostgreSQL with automated backups
+- **📊 Monitoring**: CloudWatch logs and metrics
+- **🔒 Security**: IAM roles, security groups, encryption at rest
+
+### AWS Documentation
+- **[🚀 Quick Start Guide](docs/QUICK_START_AWS.md)** - Get running in 30 minutes
+- **[📖 Complete AWS Guide](docs/AWS_DEPLOYMENT_GUIDE.md)** - Comprehensive deployment documentation
+- **[🏗️ Infrastructure Setup](infrastructure/)** - CloudFormation and Terraform templates
+
 ## 📚 Documentation
 
 - **[Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)**: System design and components
 - **[MCP Integration](docs/MCP_INTEGRATION_DOCUMENTATION.md)**: FastMCP implementation details
 - **[Web Interface Guide](docs/WEB_INTERFACE_GUIDE.md)**: Frontend usage instructions
 - **[Utility Documentation](utils/README.md)**: System management tools
+- **[CI/CD Pipeline](docs/CI_CD_PIPELINE.md)**: Complete CI/CD documentation
+- **[AWS Deployment](docs/AWS_DEPLOYMENT_GUIDE.md)**: AWS infrastructure and deployment
+- **[Quick Start AWS](docs/QUICK_START_AWS.md)**: 30-minute AWS setup guide
 
 ## 🔄 Maintenance & Operations
 
