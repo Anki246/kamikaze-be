@@ -40,7 +40,7 @@ jobs:
         
     - name: 📋 Cache Python dependencies
       id: cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/pip
@@ -74,7 +74,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
         
     - name: 📋 Restore cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/pip
@@ -106,7 +106,7 @@ jobs:
         bandit -r src/ -f txt || true
         
     - name: 📊 Upload bandit results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: bandit-security-report
@@ -130,7 +130,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
         
     - name: 📋 Restore cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/pip
@@ -199,27 +199,27 @@ jobs:
           exit 1
         fi
 
-        # Prepare the comprehensive secrets JSON
-        SECRETS_JSON=$(cat << 'EOF'
+        # Prepare the comprehensive secrets JSON using your actual GitHub secret names
+        SECRETS_JSON=$(cat << EOF
         {
           "database": {
             "staging": {
-              "host": "localhost",
-              "port": "5432",
-              "database": "kamikaze_staging",
-              "username": "fluxtrader",
-              "password": "${{ secrets.RDS_MASTER_PASSWORD }}",
+              "host": "${{ secrets.DB_HOST }}",
+              "port": "${{ secrets.DB_PORT }}",
+              "database": "${{ secrets.DB_NAME }}",
+              "username": "${{ secrets.DB_USER }}",
+              "password": "${{ secrets.DB_PASSWORD }}",
               "ssl_mode": "prefer",
               "min_size": "5",
               "max_size": "20",
               "timeout": "60"
             },
             "production": {
-              "host": "localhost",
-              "port": "5432",
-              "database": "kamikaze_production",
-              "username": "fluxtrader",
-              "password": "${{ secrets.RDS_MASTER_PASSWORD_PROD }}",
+              "host": "${{ secrets.DB_HOST }}",
+              "port": "${{ secrets.DB_PORT }}",
+              "database": "${{ secrets.DB_NAME }}_production",
+              "username": "${{ secrets.DB_USER }}",
+              "password": "${{ secrets.DB_PASSWORD }}",
               "ssl_mode": "require",
               "min_size": "10",
               "max_size": "50",
@@ -239,14 +239,14 @@ jobs:
           },
           "trading": {
             "staging": {
-              "binance_api_key": "${{ secrets.BINANCE_API_KEY_STAGING }}",
-              "binance_secret_key": "${{ secrets.BINANCE_SECRET_KEY_STAGING }}",
+              "binance_api_key": "${{ secrets.BINANCE_API_KEY }}",
+              "binance_secret_key": "${{ secrets.BINANCE_SECRET_KEY }}",
               "binance_testnet": true,
               "groq_api_key": "${{ secrets.GROQ_API_KEY }}"
             },
             "production": {
-              "binance_api_key": "${{ secrets.BINANCE_API_KEY_PROD }}",
-              "binance_secret_key": "${{ secrets.BINANCE_SECRET_KEY_PROD }}",
+              "binance_api_key": "${{ secrets.BINANCE_API_KEY }}",
+              "binance_secret_key": "${{ secrets.BINANCE_SECRET_KEY }}",
               "binance_testnet": false,
               "groq_api_key": "${{ secrets.GROQ_API_KEY }}"
             },
@@ -259,14 +259,14 @@ jobs:
           },
           "application": {
             "staging": {
-              "jwt_secret": "${{ secrets.JWT_SECRET_STAGING }}",
-              "encryption_key": "${{ secrets.ENCRYPTION_KEY_STAGING }}",
-              "credentials_encryption_key": "${{ secrets.CREDENTIALS_ENCRYPTION_KEY_STAGING }}"
+              "jwt_secret": "${{ secrets.JWT_SECRET }}",
+              "encryption_key": "${{ secrets.ENCRYPTION_KEY }}",
+              "credentials_encryption_key": "${{ secrets.CREDENTIALS_ENCRYPTION_KEY }}"
             },
             "production": {
-              "jwt_secret": "${{ secrets.JWT_SECRET_PROD }}",
-              "encryption_key": "${{ secrets.ENCRYPTION_KEY_PROD }}",
-              "credentials_encryption_key": "${{ secrets.CREDENTIALS_ENCRYPTION_KEY_PROD }}"
+              "jwt_secret": "${{ secrets.JWT_SECRET }}",
+              "encryption_key": "${{ secrets.ENCRYPTION_KEY }}",
+              "credentials_encryption_key": "${{ secrets.CREDENTIALS_ENCRYPTION_KEY }}"
             },
             "ci": {
               "jwt_secret": "ci_jwt_secret_for_testing_only",
@@ -421,7 +421,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
         
     - name: 📋 Restore cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/pip
@@ -470,7 +470,7 @@ jobs:
         name: codecov-${{ matrix.python-version }}
         
     - name: 📈 Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results-${{ matrix.python-version }}
@@ -519,7 +519,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
         
     - name: 📋 Restore cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/pip
@@ -568,7 +568,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
 
     - name: 📋 Restore cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/pip
@@ -660,7 +660,7 @@ jobs:
       continue-on-error: true
 
     - name: 📊 Upload security reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-reports
@@ -725,7 +725,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
 
     - name: 📋 Restore cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/pip
@@ -747,7 +747,7 @@ jobs:
         pytest tests/performance/ -v --benchmark-only --benchmark-json=benchmark.json || true
 
     - name: 📊 Upload benchmark results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: performance-benchmark
