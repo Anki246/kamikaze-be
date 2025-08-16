@@ -773,12 +773,19 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-    - name: 🔑 Setup SSH key for EC2
+    - name: 🔑 Setup SSH key for EC2 (if available)
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H 34.238.167.174 >> ~/.ssh/known_hosts
+        if [ -n "${{ secrets.EC2_SSH_PRIVATE_KEY }}" ]; then
+          echo "Setting up SSH key from secrets..."
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 34.238.167.174 >> ~/.ssh/known_hosts
+          echo "SSH_KEY_AVAILABLE=true" >> $GITHUB_ENV
+        else
+          echo "No SSH key found in secrets, will try alternative methods..."
+          echo "SSH_KEY_AVAILABLE=false" >> $GITHUB_ENV
+        fi
 
     - name: 🚀 Deploy to EC2
       env:
@@ -791,8 +798,14 @@ jobs:
         DB_USER: ${{ secrets.DB_USER }}
         DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       run: |
-        chmod +x scripts/deploy-to-ec2.sh
-        ./scripts/deploy-to-ec2.sh
+        chmod +x scripts/deploy-to-ec2.sh scripts/deploy-via-aws-ssm.sh
+        if [ "$SSH_KEY_AVAILABLE" = "true" ]; then
+          echo "🔑 Using SSH key deployment..."
+          ./scripts/deploy-to-ec2.sh
+        else
+          echo "🔧 Using AWS Systems Manager deployment..."
+          ./scripts/deploy-via-aws-ssm.sh
+        fi
 
     - name: 🏥 Health Check
       run: |
