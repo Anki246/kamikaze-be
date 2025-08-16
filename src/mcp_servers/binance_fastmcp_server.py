@@ -26,10 +26,10 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import numpy as np
-from pydantic import BaseModel, Field
 
 # FastMCP imports
 from fastmcp import FastMCP
+from pydantic import BaseModel, Field
 
 # Database imports
 from infrastructure.credentials_database import CredentialsDatabase
