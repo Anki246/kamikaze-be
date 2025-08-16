@@ -754,9 +754,9 @@ jobs:
         name: performance-benchmark
         path: benchmark.json
 
-  # 🚀 Deploy to EC2 (Production)
+  # 🚀 Deploy Kamikaze-be to EC2 (Production)
   deploy-to-ec2:
-    name: 🚀 Deploy to EC2
+    name: 🚀 Deploy Kamikaze-be to EC2
     runs-on: ubuntu-latest
     needs: [setup, code-quality, aws-secrets-test, unit-tests, integration-tests, build-verification, security-scan, docker-build]
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.event_name == 'push'
@@ -814,21 +814,23 @@ jobs:
 
     - name: 📊 Deployment Summary
       run: |
-        echo "## 🚀 Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "## 🚀 Kamikaze-be Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "| Component | Value |" >> $GITHUB_STEP_SUMMARY
         echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Application | Kamikaze-be Backend |" >> $GITHUB_STEP_SUMMARY
         echo "| Instance ID | i-07e35a954b57372a3 |" >> $GITHUB_STEP_SUMMARY
         echo "| Public IP | 34.238.167.174 |" >> $GITHUB_STEP_SUMMARY
+        echo "| Container | kamikaze-app |" >> $GITHUB_STEP_SUMMARY
         echo "| Application URL | http://34.238.167.174:8000 |" >> $GITHUB_STEP_SUMMARY
         echo "| Health Check | http://34.238.167.174:8000/health |" >> $GITHUB_STEP_SUMMARY
         echo "| API Docs | http://34.238.167.174:8000/docs |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔐 Security Features" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ AWS Secrets Manager integration" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ RDS database connectivity" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ SSL/TLS encryption" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Non-root container execution" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Docker containerization" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Security group configured" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Environment-based configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Automated deployment pipeline" >> $GITHUB_STEP_SUMMARY
 
   # Final Job: CI Summary with AWS Status
   ci-summary:

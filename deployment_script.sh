@@ -4,12 +4,12 @@
 
 set -e
 
-echo "🚀 Starting FluxTrader Backend Deployment..."
+echo "🚀 Starting Kamikaze-be Backend Deployment..."
 
 # Configuration
-APP_NAME="fluxtrader-backend"
-DOCKER_IMAGE="fluxtrader:latest"
-CONTAINER_NAME="fluxtrader-app"
+APP_NAME="kamikaze-be"
+DOCKER_IMAGE="kamikaze-be:latest"
+CONTAINER_NAME="kamikaze-app"
 APP_PORT="8000"
 
 # Detect OS and install dependencies

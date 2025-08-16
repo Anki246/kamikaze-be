@@ -1,5 +1,5 @@
 #!/bin/bash
-# FluxTrader Backend - EC2 Deployment Script
+# Kamikaze-be Backend - EC2 Deployment Script
 # Deploys the application to the specified EC2 instance
 
 set -e
@@ -7,10 +7,10 @@ set -e
 # Configuration
 EC2_INSTANCE_ID="i-07e35a954b57372a3"
 EC2_PUBLIC_IP="34.238.167.174"
-EC2_USER="ec2-user"
-APP_NAME="fluxtrader-backend"
-DOCKER_IMAGE="fluxtrader:latest"
-CONTAINER_NAME="fluxtrader-app"
+EC2_USER="ubuntu"
+APP_NAME="kamikaze-be"
+DOCKER_IMAGE="kamikaze-be:latest"
+CONTAINER_NAME="kamikaze-app"
 APP_PORT="8000"
 
 # Colors for output
@@ -20,7 +20,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🚀 Starting FluxTrader Backend Deployment to EC2${NC}"
+echo -e "${BLUE}🚀 Starting Kamikaze-be Backend Deployment to EC2${NC}"
 echo -e "${BLUE}Instance: ${EC2_INSTANCE_ID} (${EC2_PUBLIC_IP})${NC}"
 
 # Function to run commands on EC2

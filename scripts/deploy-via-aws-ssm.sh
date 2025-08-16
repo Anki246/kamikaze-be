@@ -7,9 +7,9 @@ set -e
 # Configuration
 EC2_INSTANCE_ID="i-07e35a954b57372a3"
 EC2_PUBLIC_IP="34.238.167.174"
-APP_NAME="fluxtrader-backend"
-DOCKER_IMAGE="fluxtrader:latest"
-CONTAINER_NAME="fluxtrader-app"
+APP_NAME="kamikaze-be"
+DOCKER_IMAGE="kamikaze-be:latest"
+CONTAINER_NAME="kamikaze-app"
 APP_PORT="8000"
 AWS_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 
@@ -110,16 +110,21 @@ echo -e "${GREEN}✅ SSM connectivity confirmed${NC}"
 
 # Install Docker and Git
 run_ssm_command "
-sudo yum update -y
-sudo yum install -y docker git
+if command -v yum &> /dev/null; then
+    sudo yum update -y
+    sudo yum install -y docker git
+elif command -v apt &> /dev/null; then
+    sudo apt update -y
+    sudo apt install -y docker.io git
+fi
 sudo systemctl start docker
 sudo systemctl enable docker
-sudo usermod -a -G docker ec2-user
+sudo usermod -a -G docker ubuntu
 " "Installing Docker and Git"
 
 # Clone repository and build
 run_ssm_command "
-cd /home/ec2-user
+cd /home/ubuntu
 rm -rf ${APP_NAME}
 git clone https://github.com/Anki246/kamikaze-be.git ${APP_NAME}
 cd ${APP_NAME}
