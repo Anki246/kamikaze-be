@@ -1,0 +1,112 @@
+name: Simple Secrets Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+  id-token: write
+
+jobs:
+  simple-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🔍 Basic Test
+      run: |
+        echo "=== BASIC GITHUB ACTIONS TEST ==="
+        echo "Repository: ${{ github.repository }}"
+        echo "Actor: ${{ github.actor }}"
+        echo "Run ID: ${{ github.run_id }}"
+        echo ""
+        
+        echo "=== GITHUB TOKEN TEST ==="
+        if [ -n "$GITHUB_TOKEN" ]; then
+          echo "✅ GITHUB_TOKEN is available"
+          echo "Token length: ${#GITHUB_TOKEN}"
+        else
+          echo "❌ GITHUB_TOKEN is NOT available"
+          echo "This indicates GitHub Actions permissions are not properly configured"
+        fi
+        echo ""
+        
+        echo "=== SIMPLE SECRET TEST ==="
+        echo "Testing a simple secret..."
+        if [ -n "$SIMPLE_TEST" ]; then
+          echo "✅ SIMPLE_TEST secret is accessible: $SIMPLE_TEST"
+        else
+          echo "❌ SIMPLE_TEST secret is NOT accessible"
+        fi
+        echo ""
+        
+        echo "=== AWS SECRETS TEST ==="
+        if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+          echo "✅ AWS_ACCESS_KEY_ID is accessible"
+        else
+          echo "❌ AWS_ACCESS_KEY_ID is NOT accessible"
+        fi
+        
+        if [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+          echo "✅ AWS_SECRET_ACCESS_KEY is accessible"
+        else
+          echo "❌ AWS_SECRET_ACCESS_KEY is NOT accessible"
+        fi
+        echo ""
+        
+        echo "=== DIAGNOSIS ==="
+        if [ -z "$GITHUB_TOKEN" ]; then
+          echo "🚨 CRITICAL ISSUE: GITHUB_TOKEN not available"
+          echo "This means GitHub Actions is not properly enabled for this repository"
+          echo ""
+          echo "IMMEDIATE ACTIONS REQUIRED:"
+          echo "1. Go to: https://github.com/${{ github.repository }}/settings/actions"
+          echo "2. Check 'Actions permissions' section"
+          echo "3. Select 'Allow all actions and reusable workflows'"
+          echo "4. Check 'Workflow permissions' section"
+          echo "5. Select 'Read and write permissions'"
+          echo "6. Click 'Save'"
+          echo ""
+        elif [ -z "$SIMPLE_TEST" ] && [ -z "$AWS_ACCESS_KEY_ID" ]; then
+          echo "⚠️ GITHUB_TOKEN available but no secrets accessible"
+          echo "This means secrets are not added to the repository"
+          echo ""
+          echo "ACTIONS REQUIRED:"
+          echo "1. Go to: https://github.com/${{ github.repository }}/settings/secrets/actions"
+          echo "2. Add a test secret: Name=SIMPLE_TEST, Value=hello"
+          echo "3. Add AWS secrets with exact names"
+          echo "4. Re-run this workflow"
+          echo ""
+        else
+          echo "✅ Some configuration is working"
+          echo "Add missing secrets to complete setup"
+        fi
+        
+      env:
+        SIMPLE_TEST: ${{ secrets.SIMPLE_TEST }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    - name: 📋 Next Steps
+      run: |
+        echo "=== WHAT TO DO NEXT ==="
+        echo ""
+        echo "1. FIRST: Check if this workflow shows GITHUB_TOKEN as available"
+        echo "   - If NO: Fix GitHub Actions permissions first"
+        echo "   - If YES: Add secrets to repository"
+        echo ""
+        echo "2. GITHUB ACTIONS SETTINGS:"
+        echo "   URL: https://github.com/${{ github.repository }}/settings/actions"
+        echo "   - Actions permissions: Allow all actions"
+        echo "   - Workflow permissions: Read and write"
+        echo ""
+        echo "3. REPOSITORY SECRETS:"
+        echo "   URL: https://github.com/${{ github.repository }}/settings/secrets/actions"
+        echo "   - Add SIMPLE_TEST = hello (for testing)"
+        echo "   - Add AWS_ACCESS_KEY_ID = your access key"
+        echo "   - Add AWS_SECRET_ACCESS_KEY = your secret key"
+        echo ""
+        echo "4. TEST AGAIN:"
+        echo "   - Re-run this workflow"
+        echo "   - Should show secrets as accessible"
+        echo "   - Then run main CI pipeline"
