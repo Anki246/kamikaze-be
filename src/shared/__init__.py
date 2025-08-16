@@ -4,8 +4,7 @@ Contains common utilities, constants, and helper functions used across the appli
 """
 
 from .constants import *
-from .logging_config import (get_logs_directory, setup_component_logging,
-                             setup_logging)
+from .logging_config import get_logs_directory, setup_component_logging, setup_logging
 from .mcp_server_manager import MCPServerManager
 from .utils import *
 

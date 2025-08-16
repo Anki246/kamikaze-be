@@ -16,13 +16,17 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from agents.fluxtrader.fastmcp_client import FluxTraderMCPClient
-from infrastructure.event_bus import (BaseEvent, EventType, TradingSignalEvent,
-                                      event_bus, publish_order_event)
+from infrastructure.event_bus import (
+    BaseEvent,
+    EventType,
+    TradingSignalEvent,
+    event_bus,
+    publish_order_event,
+)
 from shared.logging_config import setup_logging
 
 # Add src directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 
 
 class OrderStatus(str, Enum):

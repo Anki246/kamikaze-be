@@ -31,11 +31,19 @@ from shared.logging_config import setup_logging
 
 # User Context middleware - CRITICAL: Add dynamic user context system
 from .middleware.user_context_middleware import UserContextMiddleware
-from .models.agent_models import (AgentConfigResponse, AgentCreateRequest,
-                                  AgentResponse, AgentStatusResponse,
-                                  TradingMetricsResponse)
-from .models.market_models import (MarketDataResponse, MarketStatsResponse,
-                                   TechnicalIndicatorsResponse, TickerResponse)
+from .models.agent_models import (
+    AgentConfigResponse,
+    AgentCreateRequest,
+    AgentResponse,
+    AgentStatusResponse,
+    TradingMetricsResponse,
+)
+from .models.market_models import (
+    MarketDataResponse,
+    MarketStatsResponse,
+    TechnicalIndicatorsResponse,
+    TickerResponse,
+)
 from .routes.agent_routes import router as agent_router
 from .routes.agent_routes import set_managers as set_agent_managers
 from .routes.auth_routes import router as auth_router

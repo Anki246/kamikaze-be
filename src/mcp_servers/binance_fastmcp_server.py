@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 
 # FastMCP imports
 from fastmcp import FastMCP
+
 # Database imports
 from infrastructure.credentials_database import CredentialsDatabase
 
@@ -43,7 +44,6 @@ except ImportError:
 
 # Add src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
 
 
 # Technical Analysis Libraries

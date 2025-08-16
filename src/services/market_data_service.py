@@ -15,13 +15,16 @@ from typing import Dict, List, Optional, Set
 import aiohttp
 import websockets
 
-from infrastructure.event_bus import (BaseEvent, EventType, event_bus,
-                                      publish_market_data)
+from infrastructure.event_bus import (
+    BaseEvent,
+    EventType,
+    event_bus,
+    publish_market_data,
+)
 from shared.logging_config import setup_logging
 
 # Add src directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 
 
 class MarketDataService:

@@ -18,18 +18,19 @@ Usage:
 import argparse
 import asyncio
 import logging
-import signal
-import sys
-import subprocess
 import os
-import time
+import signal
+import subprocess
+import sys
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
     print("✅ Loaded environment variables from .env file")
 except ImportError:
@@ -42,8 +43,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -52,11 +52,13 @@ shutdown_requested = False
 mcp_server_process = None
 fastapi_process = None
 
+
 def signal_handler(signum, frame):
     """Handle shutdown signals."""
     global shutdown_requested
     logger.info(f"Received signal {signum}, initiating graceful shutdown...")
     shutdown_requested = True
+
 
 class FluxTraderBackend:
     """Main backend application class."""
@@ -79,13 +81,20 @@ class FluxTraderBackend:
         """Start the Binance FastMCP server in a separate process."""
         try:
             logger.info("🔧 Starting Binance FastMCP Server...")
-            
+
             # Path to the Binance FastMCP server
-            mcp_server_path = Path(__file__).parent / "src" / "mcp_servers" / "binance_fastmcp_server.py"
-            
+            mcp_server_path = (
+                Path(__file__).parent
+                / "src"
+                / "mcp_servers"
+                / "binance_fastmcp_server.py"
+            )
+
             if not mcp_server_path.exists():
-                raise FileNotFoundError(f"Binance FastMCP server not found at {mcp_server_path}")
-            
+                raise FileNotFoundError(
+                    f"Binance FastMCP server not found at {mcp_server_path}"
+                )
+
             # Start the MCP server process with environment variables
             env = os.environ.copy()  # Copy current environment including .env variables
             self.mcp_server_process = subprocess.Popen(
@@ -95,12 +104,12 @@ class FluxTraderBackend:
                 text=True,
                 bufsize=1,
                 universal_newlines=True,
-                env=env  # Pass environment variables to subprocess
+                env=env,  # Pass environment variables to subprocess
             )
-            
+
             # Give the server a moment to start
             time.sleep(2)
-            
+
             # Check if the process is still running
             if self.mcp_server_process.poll() is None:
                 logger.info("✅ Binance FastMCP Server started successfully")
@@ -112,7 +121,7 @@ class FluxTraderBackend:
                 logger.error(f"STDOUT: {stdout}")
                 logger.error(f"STDERR: {stderr}")
                 return False
-                
+
         except Exception as e:
             logger.error(f"❌ Failed to start Binance FastMCP Server: {e}")
             return False
@@ -123,10 +132,17 @@ class FluxTraderBackend:
             logger.info("🔧 Starting PostgreSQL FastMCP Server...")
 
             # Path to the PostgreSQL FastMCP server
-            postgres_mcp_server_path = Path(__file__).parent / "src" / "mcp_servers" / "postgres_fastmcp_server.py"
+            postgres_mcp_server_path = (
+                Path(__file__).parent
+                / "src"
+                / "mcp_servers"
+                / "postgres_fastmcp_server.py"
+            )
 
             if not postgres_mcp_server_path.exists():
-                raise FileNotFoundError(f"PostgreSQL FastMCP server not found at {postgres_mcp_server_path}")
+                raise FileNotFoundError(
+                    f"PostgreSQL FastMCP server not found at {postgres_mcp_server_path}"
+                )
 
             # Start the PostgreSQL MCP server process with environment variables
             env = os.environ.copy()  # Copy current environment including .env variables
@@ -137,7 +153,7 @@ class FluxTraderBackend:
                 text=True,
                 bufsize=1,
                 universal_newlines=True,
-                env=env  # Pass environment variables to subprocess
+                env=env,  # Pass environment variables to subprocess
             )
 
             # Give the server a moment to start
@@ -168,25 +184,29 @@ class FluxTraderBackend:
             fastapi_main_path = Path(__file__).parent / "src" / "api" / "main.py"
 
             if not fastapi_main_path.exists():
-                raise FileNotFoundError(f"FastAPI main module not found at {fastapi_main_path}")
+                raise FileNotFoundError(
+                    f"FastAPI main module not found at {fastapi_main_path}"
+                )
 
             # Start the FastAPI server using uvicorn with visible logs
             cmd = [
-                sys.executable, "-m", "uvicorn",
+                sys.executable,
+                "-m",
+                "uvicorn",
                 "src.api.main:app",
-                "--host", self.host,
-                "--port", str(self.port),
+                "--host",
+                self.host,
+                "--port",
+                str(self.port),
                 "--reload",
-                "--log-level", "info",
-                "--access-log"
+                "--log-level",
+                "info",
+                "--access-log",
             ]
 
             # Start process without capturing output so logs are visible
             self.fastapi_process = subprocess.Popen(
-                cmd,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
+                cmd, text=True, bufsize=1, universal_newlines=True
             )
 
             # Give the server a moment to start
@@ -194,7 +214,9 @@ class FluxTraderBackend:
 
             # Check if the process is still running
             if self.fastapi_process.poll() is None:
-                logger.info(f"✅ FastAPI Backend Server started successfully on {self.host}:{self.port}")
+                logger.info(
+                    f"✅ FastAPI Backend Server started successfully on {self.host}:{self.port}"
+                )
                 logger.info("📋 FastAPI logs will be displayed below:")
                 return True
             else:
@@ -208,17 +230,22 @@ class FluxTraderBackend:
     def monitor_processes(self):
         """Monitor all processes and restart if needed."""
         restart_count = {}  # Track restart attempts to prevent loops
-        max_restarts = 3    # Maximum restarts per process
+        max_restarts = 3  # Maximum restarts per process
 
         while self.running and not shutdown_requested:
             try:
                 # Check Binance MCP server - with longer intervals to prevent spam
-                if self.mcp_server_process and self.mcp_server_process.poll() is not None:
+                if (
+                    self.mcp_server_process
+                    and self.mcp_server_process.poll() is not None
+                ):
                     process_name = "binance_mcp"
                     restart_count.setdefault(process_name, 0)
 
                     if restart_count[process_name] < max_restarts:
-                        logger.warning(f"⚠️ Binance FastMCP Server process died, restarting... (attempt {restart_count[process_name] + 1}/{max_restarts})")
+                        logger.warning(
+                            f"⚠️ Binance FastMCP Server process died, restarting... (attempt {restart_count[process_name] + 1}/{max_restarts})"
+                        )
                         # Wait longer between restart attempts to prevent spam
                         time.sleep(30)  # Wait 30 seconds before restart
                         if self.start_binance_fastmcp_server():
@@ -227,7 +254,9 @@ class FluxTraderBackend:
                             logger.error("❌ Failed to restart Binance FastMCP Server")
                             restart_count[process_name] = max_restarts  # Stop trying
                     else:
-                        logger.error(f"❌ Binance FastMCP Server exceeded maximum restart attempts ({max_restarts})")
+                        logger.error(
+                            f"❌ Binance FastMCP Server exceeded maximum restart attempts ({max_restarts})"
+                        )
                         # Set process to None to stop checking
                         self.mcp_server_process = None
 
@@ -249,7 +278,9 @@ class FluxTraderBackend:
 
                 # Check FastAPI server (but don't restart it as uvicorn handles this)
                 if self.fastapi_process and self.fastapi_process.poll() is not None:
-                    logger.info("ℹ️ FastAPI Backend Server stopped (uvicorn handles restarts)")
+                    logger.info(
+                        "ℹ️ FastAPI Backend Server stopped (uvicorn handles restarts)"
+                    )
 
                 time.sleep(10)  # Check every 10 seconds (reduced frequency)
 
@@ -271,8 +302,12 @@ class FluxTraderBackend:
             # DISABLED: Using direct database connections for critical operations
             # This provides better performance and stability for multi-agentic system
             # PostgreSQL MCP will be re-enabled later for analytics operations only
-            logger.info("📊 PostgreSQL FastMCP Server disabled - using direct database for critical operations")
-            logger.info("🔄 Hybrid approach: Direct DB for performance, MCP for analytics (future)")
+            logger.info(
+                "📊 PostgreSQL FastMCP Server disabled - using direct database for critical operations"
+            )
+            logger.info(
+                "🔄 Hybrid approach: Direct DB for performance, MCP for analytics (future)"
+            )
 
             # Start FastAPI Backend Server
             if not self.start_fastapi_backend():
@@ -289,7 +324,9 @@ class FluxTraderBackend:
             logger.info("=" * 60)
 
             # Start process monitoring in a separate thread
-            monitor_thread = threading.Thread(target=self.monitor_processes, daemon=True)
+            monitor_thread = threading.Thread(
+                target=self.monitor_processes, daemon=True
+            )
             monitor_thread.start()
 
             # Keep running until shutdown is requested
@@ -327,7 +364,9 @@ class FluxTraderBackend:
                 try:
                     self.mcp_server_process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
-                    logger.warning("Binance MCP server didn't stop gracefully, killing...")
+                    logger.warning(
+                        "Binance MCP server didn't stop gracefully, killing..."
+                    )
                     self.mcp_server_process.kill()
 
             # Stop PostgreSQL MCP server
@@ -337,15 +376,22 @@ class FluxTraderBackend:
                 try:
                     self.postgres_mcp_process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
-                    logger.warning("PostgreSQL MCP server didn't stop gracefully, killing...")
+                    logger.warning(
+                        "PostgreSQL MCP server didn't stop gracefully, killing..."
+                    )
                     self.postgres_mcp_process.kill()
 
             # Kill any remaining MCP server processes to prevent duplicates
             try:
                 import subprocess
+
                 logger.info("🧹 Cleaning up any remaining MCP server processes...")
-                subprocess.run(["pkill", "-f", "binance_fastmcp_server.py"], check=False)
-                subprocess.run(["pkill", "-f", "postgres_fastmcp_server.py"], check=False)
+                subprocess.run(
+                    ["pkill", "-f", "binance_fastmcp_server.py"], check=False
+                )
+                subprocess.run(
+                    ["pkill", "-f", "postgres_fastmcp_server.py"], check=False
+                )
             except Exception as cleanup_error:
                 logger.warning(f"Cleanup warning: {cleanup_error}")
 
@@ -354,11 +400,14 @@ class FluxTraderBackend:
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
 
+
 async def main():
     """Main function."""
     parser = argparse.ArgumentParser(description="FluxTrader Backend System")
     parser.add_argument("--port", type=int, default=8000, help="FastAPI server port")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="FastAPI server host")
+    parser.add_argument(
+        "--host", type=str, default="0.0.0.0", help="FastAPI server host"
+    )
 
     args = parser.parse_args()
 
@@ -374,6 +423,7 @@ async def main():
         sys.exit(1)
     finally:
         await backend.shutdown()
+
 
 if __name__ == "__main__":
     try:

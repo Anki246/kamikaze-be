@@ -16,14 +16,18 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from agents.fluxtrader.groq_client import GroqClient
-from infrastructure.event_bus import (BaseEvent, EventType, MarketDataEvent,
-                                      TradingSignalEvent, event_bus,
-                                      publish_trading_signal)
+from infrastructure.event_bus import (
+    BaseEvent,
+    EventType,
+    MarketDataEvent,
+    TradingSignalEvent,
+    event_bus,
+    publish_trading_signal,
+)
 from shared.logging_config import setup_logging
 
 # Add src directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 
 
 @dataclass

@@ -14,15 +14,22 @@ import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...services.portfolio_service import portfolio_service
-from ..models.dashboard_models import (AIInsight, AssetBalance,
-                                       DashboardOverview,
-                                       DashboardQuickStatsResponse,
-                                       ErrorResponse, HealthCheckResponse,
-                                       PortfolioMetrics,
-                                       PortfolioPerformancePoint,
-                                       PortfolioPerformanceResponse,
-                                       QuickStats, RecentTrade, RiskMetrics,
-                                       TopAsset, TradingBotMetrics)
+from ..models.dashboard_models import (
+    AIInsight,
+    AssetBalance,
+    DashboardOverview,
+    DashboardQuickStatsResponse,
+    ErrorResponse,
+    HealthCheckResponse,
+    PortfolioMetrics,
+    PortfolioPerformancePoint,
+    PortfolioPerformanceResponse,
+    QuickStats,
+    RecentTrade,
+    RiskMetrics,
+    TopAsset,
+    TradingBotMetrics,
+)
 from .auth_routes import get_current_user
 
 # Try to import agent_manager, but handle if it's not available

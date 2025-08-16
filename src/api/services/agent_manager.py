@@ -13,17 +13,22 @@ from typing import Any, Dict, List, Optional
 
 from agents.base_agent import AgentStatus, BaseAgent
 from agents.fluxtrader.agent import FluxTraderAgent
-from api.models.agent_models import (AgentConfigResponse, AgentConfiguration,
-                                     AgentMetadata, AgentPerformanceMetrics,
-                                     AgentResponse, AgentRuntimeData,
-                                     AgentStatusResponse, StrategyType,
-                                     TradingMetricsResponse)
+from api.models.agent_models import (
+    AgentConfigResponse,
+    AgentConfiguration,
+    AgentMetadata,
+    AgentPerformanceMetrics,
+    AgentResponse,
+    AgentRuntimeData,
+    AgentStatusResponse,
+    StrategyType,
+    TradingMetricsResponse,
+)
 from infrastructure.credentials_database import CredentialsDatabase
 from shared.logging_config import setup_logging
 
 # Add src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 
 
 class AgentManager:

@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+
 # Handle imports for different execution contexts
 import sys
 import time
@@ -29,25 +30,27 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 # Import base agent and multi-agent system components
-from agents.base_agent import (AgentMetadata, AgentStatus, BaseAgent,
-                               StrategyType)
+from agents.base_agent import AgentMetadata, AgentStatus, BaseAgent, StrategyType
+
 # Import FluxTrader-specific configuration
 from agents.fluxtrader.config import config
+
 # Import FastMCP client for enhanced MCP integration
-from agents.fluxtrader.fastmcp_client import (FluxTraderMCPClient,
-                                              create_binance_client)
+from agents.fluxtrader.fastmcp_client import FluxTraderMCPClient, create_binance_client
 from shared.constants import API_ENDPOINTS, DEFAULT_CONFIG, TRADING_PAIRS
 from shared.logging_config import setup_logging
-from shared.utils import (calculate_percentage_change, format_currency,
-                          generate_binance_signature, get_timestamp,
-                          validate_trading_pair)
+from shared.utils import (
+    calculate_percentage_change,
+    format_currency,
+    generate_binance_signature,
+    get_timestamp,
+    validate_trading_pair,
+)
 
 # Add src directory to path if not already there
 src_path = Path(__file__).parent.parent.parent
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
-
-
 
 
 # Groq LLM Integration - PRESERVED from original
