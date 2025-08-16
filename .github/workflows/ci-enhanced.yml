@@ -138,17 +138,20 @@ jobs:
     - name: 🔍 Check AWS credentials availability
       run: |
         echo "Checking AWS credentials configuration..."
-        if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
-          echo "❌ AWS_ACCESS_KEY_ID secret is not configured"
+        if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+          echo "✅ AWS_ACCESS_KEY_ID is available"
         else
-          echo "✅ AWS_ACCESS_KEY_ID secret is configured"
+          echo "❌ AWS_ACCESS_KEY_ID is not configured"
         fi
 
-        if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
-          echo "❌ AWS_SECRET_ACCESS_KEY secret is not configured"
+        if [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+          echo "✅ AWS_SECRET_ACCESS_KEY is available"
         else
-          echo "✅ AWS_SECRET_ACCESS_KEY secret is configured"
+          echo "❌ AWS_SECRET_ACCESS_KEY is not configured"
         fi
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: 🔧 Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -157,7 +160,6 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_DEFAULT_REGION }}
       continue-on-error: true
-      if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
         
     - name: 🧪 Test AWS Secrets Manager integration
       run: |
