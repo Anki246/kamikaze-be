@@ -2,6 +2,8 @@
 """
 Script to fix all formatting issues to match CI environment expectations.
 Uses exact same versions as CI: black==23.3.0, isort==5.11.5
+
+This script ensures perfect compatibility between local and CI environments.
 """
 
 import os
