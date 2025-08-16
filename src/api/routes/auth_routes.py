@@ -30,10 +30,12 @@ security = HTTPBearer()
 # Remove FastMCP dependency - using direct database connection
 database_client = None
 
+
 def set_database_client(db_client):
     """Set the global database client."""
     global database_client
     database_client = db_client
+
 
 # JWT Configuration
 JWT_SECRET = "your-secret-key-change-in-production"  # Should be from environment

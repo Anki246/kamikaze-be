@@ -38,9 +38,9 @@ import pandas as pd
 # Optional MCP imports - gracefully handle if not available
 try:
     import mcp
+    from mcp import types
     from mcp.server import NotificationOptions, Server
     from mcp.server.models import InitializationOptions
-    from mcp import types
     from mcp.types import (
         EmbeddedResource,
         ImageContent,

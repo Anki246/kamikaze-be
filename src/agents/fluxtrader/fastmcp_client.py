@@ -21,9 +21,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from fastmcp.client.transports import StdioTransport
+
 # FastMCP imports
 from fastmcp import Client
-from fastmcp.client.transports import StdioTransport
 
 # Add src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

@@ -26,10 +26,10 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import numpy as np
+from pydantic import BaseModel, Field
 
 # FastMCP imports
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
 
 # Database imports
 from infrastructure.credentials_database import CredentialsDatabase
@@ -894,7 +894,10 @@ async def get_server_status() -> Dict[str, Any]:
             "features": {
                 "talib_available": TALIB_AVAILABLE,
                 "websocket_available": WEBSOCKET_AVAILABLE,
-                "binance_configured": bool(current_user_credentials.get("api_key") and current_user_credentials.get("secret_key")),
+                "binance_configured": bool(
+                    current_user_credentials.get("api_key")
+                    and current_user_credentials.get("secret_key")
+                ),
             },
             "statistics": {
                 "active_streams": len(active_streams),
