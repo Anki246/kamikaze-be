@@ -759,7 +759,7 @@ jobs:
     name: 🚀 Deploy to EC2
     runs-on: ubuntu-latest
     needs: [setup, code-quality, aws-secrets-test, unit-tests, integration-tests, build-verification, security-scan, docker-build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.event_name == 'push'
     environment: production
 
     steps:
