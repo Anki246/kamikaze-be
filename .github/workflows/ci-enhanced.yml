@@ -781,6 +781,15 @@ jobs:
         ssh-keyscan -H 34.238.167.174 >> ~/.ssh/known_hosts
 
     - name: 🚀 Deploy to EC2
+      env:
+        ENVIRONMENT: production
+        USE_AWS_SECRETS: true
+        AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+        DB_HOST: ${{ secrets.DB_HOST }}
+        DB_PORT: ${{ secrets.DB_PORT }}
+        DB_NAME: ${{ secrets.DB_NAME }}
+        DB_USER: ${{ secrets.DB_USER }}
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       run: |
         chmod +x scripts/deploy-to-ec2.sh
         ./scripts/deploy-to-ec2.sh

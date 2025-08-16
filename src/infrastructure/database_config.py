@@ -66,9 +66,11 @@ class DatabaseConfig:
 
     def _should_use_aws_secrets(self) -> bool:
         """Determine if AWS Secrets Manager should be used."""
-        return AWS_SECRETS_AVAILABLE and (
-            os.getenv("ENVIRONMENT") == "production"
-            or os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
+        # Only use AWS Secrets Manager if explicitly enabled and available
+        # In CI/production, we may use environment variables instead
+        return (
+            AWS_SECRETS_AVAILABLE
+            and os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
         )
 
     def _load_from_aws_secrets(self) -> bool:

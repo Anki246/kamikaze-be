@@ -97,6 +97,11 @@ run_on_ec2 "
         -e ENVIRONMENT=production \
         -e USE_AWS_SECRETS=true \
         -e AWS_DEFAULT_REGION=us-east-1 \
+        -e DB_HOST=\"${DB_HOST:-}\" \
+        -e DB_PORT=\"${DB_PORT:-5432}\" \
+        -e DB_NAME=\"${DB_NAME:-kamikaze}\" \
+        -e DB_USER=\"${DB_USER:-}\" \
+        -e DB_PASSWORD=\"${DB_PASSWORD:-}\" \
         ${DOCKER_IMAGE}
 "
 

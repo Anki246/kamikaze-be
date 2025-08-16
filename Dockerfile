@@ -35,8 +35,8 @@ COPY . .
 RUN mkdir -p logs data && \
     chown -R fluxtrader:fluxtrader /app
 
-# Copy production environment file
-COPY .env.production .env
+# Production environment variables will be set via GitHub secrets
+# No .env file needed in production - all config via environment variables
 
 # Switch to non-root user
 USER fluxtrader
