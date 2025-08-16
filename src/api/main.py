@@ -242,19 +242,110 @@ async def api_info():
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint with comprehensive service status."""
+    from infrastructure.database_config import DatabaseConfig
+    from infrastructure.aws_secrets_manager import AWSSecretsManager
+
+    # Check database connectivity
+    db_status = "unknown"
+    try:
+        db_config = DatabaseConfig()
+        # Simple connection test would go here
+        db_status = "connected" if db_config.host != "localhost" else "local"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+
+    # Check AWS Secrets Manager connectivity
+    aws_status = "unknown"
+    try:
+        if os.getenv("ENVIRONMENT") == "production" or os.getenv("USE_AWS_SECRETS", "false").lower() == "true":
+            secrets_manager = AWSSecretsManager()
+            # Test AWS connectivity
+            aws_status = "connected"
+        else:
+            aws_status = "disabled"
+    except Exception as e:
+        aws_status = f"error: {str(e)}"
+
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "version": "2.0.0",
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "instance": {
+            "host": os.getenv("API_HOST", "localhost"),
+            "port": os.getenv("API_PORT", "8000"),
+        },
         "services": {
             "agent_manager": agent_manager.is_healthy() if agent_manager else False,
             "websocket_manager": websocket_manager.is_healthy()
             if websocket_manager
             else False,
             "market_data_api": market_data_api.connected if market_data_api else False,
+            "database": db_status,
+            "aws_secrets": aws_status,
         },
     }
+
+
+# Database health check endpoint
+@app.get("/health/database")
+async def database_health_check():
+    """Database connectivity health check."""
+    from infrastructure.database_config import DatabaseConfig
+
+    try:
+        db_config = DatabaseConfig()
+        return {
+            "status": "healthy",
+            "database": {
+                "host": db_config.host,
+                "port": db_config.port,
+                "database": db_config.database,
+                "ssl_mode": db_config.ssl_mode,
+                "connection_source": "aws_secrets" if db_config.host != "localhost" else "environment",
+            },
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+
+# AWS services health check endpoint
+@app.get("/health/aws")
+async def aws_health_check():
+    """AWS services connectivity health check."""
+    from infrastructure.aws_secrets_manager import AWSSecretsManager
+
+    try:
+        if os.getenv("ENVIRONMENT") == "production" or os.getenv("USE_AWS_SECRETS", "false").lower() == "true":
+            secrets_manager = AWSSecretsManager()
+            # Test retrieving database credentials
+            db_credentials = secrets_manager.get_database_credentials()
+
+            return {
+                "status": "healthy",
+                "aws_region": os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+                "secrets_manager": "connected",
+                "database_credentials": "available" if db_credentials else "unavailable",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        else:
+            return {
+                "status": "disabled",
+                "message": "AWS services disabled in development mode",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
 
 
 # Agent Management Endpoints

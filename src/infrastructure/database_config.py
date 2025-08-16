@@ -1,9 +1,11 @@
 """
 Database Configuration for FluxTrader
 Handles PostgreSQL database configuration and connection management
+Supports both local environment variables and AWS Secrets Manager
 """
 
 import os
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -15,6 +17,15 @@ try:
     load_dotenv()
 except ImportError:
     pass
+
+# Import AWS Secrets Manager integration
+try:
+    from .aws_secrets_manager import AWSSecretsManager
+    AWS_SECRETS_AVAILABLE = True
+except ImportError:
+    AWS_SECRETS_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -32,6 +43,52 @@ class DatabaseConfig:
     ssl_mode: str = "prefer"
 
     def __post_init__(self):
+        """Load configuration from AWS Secrets Manager or environment variables."""
+        # Try AWS Secrets Manager first if in production environment
+        if self._should_use_aws_secrets():
+            logger.info("🔐 Attempting to load database configuration from AWS Secrets Manager")
+            if self._load_from_aws_secrets():
+                logger.info("✅ Successfully loaded database configuration from AWS Secrets Manager")
+                return
+            else:
+                logger.warning("⚠️  Failed to load from AWS Secrets Manager, falling back to environment variables")
+
+        # Fallback to environment variables
+        logger.info("🔧 Loading database configuration from environment variables")
+        self._load_from_environment()
+
+    def _should_use_aws_secrets(self) -> bool:
+        """Determine if AWS Secrets Manager should be used."""
+        return (
+            AWS_SECRETS_AVAILABLE and
+            (os.getenv("ENVIRONMENT") == "production" or
+             os.getenv("USE_AWS_SECRETS", "false").lower() == "true")
+        )
+
+    def _load_from_aws_secrets(self) -> bool:
+        """Load database configuration from AWS Secrets Manager."""
+        try:
+            secrets_manager = AWSSecretsManager()
+            db_credentials = secrets_manager.get_database_credentials()
+
+            if db_credentials:
+                self.host = db_credentials.get("host", self.host)
+                self.port = int(db_credentials.get("port", self.port))
+                self.database = db_credentials.get("database", self.database)
+                self.user = db_credentials.get("username", self.user)
+                self.password = db_credentials.get("password", self.password)
+
+                # Use SSL for RDS connections
+                if self.host != "localhost":
+                    self.ssl_mode = "require"
+
+                return True
+        except Exception as e:
+            logger.error(f"❌ Error loading from AWS Secrets Manager: {e}")
+
+        return False
+
+    def _load_from_environment(self):
         """Load configuration from environment variables."""
         # Use DB_ prefix for consistency with FastMCP server
         self.host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", self.host))
