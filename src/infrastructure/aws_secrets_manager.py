@@ -189,11 +189,15 @@ class SecretsManager:
             secret_value = await self._get_secret_value("kmkz-database")
 
             if secret_value:
-                logger.info("✅ Using database credentials from AWS Secrets Manager (kmkz-database)")
+                logger.info(
+                    "✅ Using database credentials from AWS Secrets Manager (kmkz-database)"
+                )
                 return DatabaseCredentials(
                     host=secret_value.get("host", "localhost"),
                     port=int(secret_value.get("port", 5432)),
-                    database=secret_value.get("dbname", secret_value.get("database", "kamikaze")),
+                    database=secret_value.get(
+                        "dbname", secret_value.get("database", "kamikaze")
+                    ),
                     username=secret_value.get("username", "postgres"),
                     password=secret_value.get("password", ""),
                     ssl_mode="require",  # Use SSL for RDS connections
@@ -202,7 +206,9 @@ class SecretsManager:
                     timeout=int(secret_value.get("timeout", 60)),
                 )
         except Exception as e:
-            logger.warning(f"Failed to get database credentials from kmkz-database: {e}")
+            logger.warning(
+                f"Failed to get database credentials from kmkz-database: {e}"
+            )
 
         # Fallback: Try legacy kmkz-secrets format
         try:

@@ -243,8 +243,8 @@ async def api_info():
 @app.get("/health")
 async def health_check():
     """Health check endpoint with comprehensive service status."""
-    from infrastructure.database_config import DatabaseConfig
     from infrastructure.aws_secrets_manager import AWSSecretsManager
+    from infrastructure.database_config import DatabaseConfig
 
     # Check database connectivity
     db_status = "unknown"
@@ -258,7 +258,10 @@ async def health_check():
     # Check AWS Secrets Manager connectivity
     aws_status = "unknown"
     try:
-        if os.getenv("ENVIRONMENT") == "production" or os.getenv("USE_AWS_SECRETS", "false").lower() == "true":
+        if (
+            os.getenv("ENVIRONMENT") == "production"
+            or os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
+        ):
             secrets_manager = AWSSecretsManager()
             # Test AWS connectivity
             aws_status = "connected"
@@ -303,7 +306,9 @@ async def database_health_check():
                 "port": db_config.port,
                 "database": db_config.database,
                 "ssl_mode": db_config.ssl_mode,
-                "connection_source": "aws_secrets" if db_config.host != "localhost" else "environment",
+                "connection_source": "aws_secrets"
+                if db_config.host != "localhost"
+                else "environment",
             },
             "timestamp": datetime.utcnow().isoformat(),
         }
@@ -322,7 +327,10 @@ async def aws_health_check():
     from infrastructure.aws_secrets_manager import AWSSecretsManager
 
     try:
-        if os.getenv("ENVIRONMENT") == "production" or os.getenv("USE_AWS_SECRETS", "false").lower() == "true":
+        if (
+            os.getenv("ENVIRONMENT") == "production"
+            or os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
+        ):
             secrets_manager = AWSSecretsManager()
             # Test retrieving database credentials
             db_credentials = secrets_manager.get_database_credentials()
@@ -331,7 +339,9 @@ async def aws_health_check():
                 "status": "healthy",
                 "aws_region": os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
                 "secrets_manager": "connected",
-                "database_credentials": "available" if db_credentials else "unavailable",
+                "database_credentials": "available"
+                if db_credentials
+                else "unavailable",
                 "timestamp": datetime.utcnow().isoformat(),
             }
         else:

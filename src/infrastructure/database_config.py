@@ -4,8 +4,8 @@ Handles PostgreSQL database configuration and connection management
 Supports both local environment variables and AWS Secrets Manager
 """
 
-import os
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -21,6 +21,7 @@ except ImportError:
 # Import AWS Secrets Manager integration
 try:
     from .aws_secrets_manager import AWSSecretsManager
+
     AWS_SECRETS_AVAILABLE = True
 except ImportError:
     AWS_SECRETS_AVAILABLE = False
@@ -46,12 +47,18 @@ class DatabaseConfig:
         """Load configuration from AWS Secrets Manager or environment variables."""
         # Try AWS Secrets Manager first if in production environment
         if self._should_use_aws_secrets():
-            logger.info("🔐 Attempting to load database configuration from AWS Secrets Manager")
+            logger.info(
+                "🔐 Attempting to load database configuration from AWS Secrets Manager"
+            )
             if self._load_from_aws_secrets():
-                logger.info("✅ Successfully loaded database configuration from AWS Secrets Manager")
+                logger.info(
+                    "✅ Successfully loaded database configuration from AWS Secrets Manager"
+                )
                 return
             else:
-                logger.warning("⚠️  Failed to load from AWS Secrets Manager, falling back to environment variables")
+                logger.warning(
+                    "⚠️  Failed to load from AWS Secrets Manager, falling back to environment variables"
+                )
 
         # Fallback to environment variables
         logger.info("🔧 Loading database configuration from environment variables")
@@ -59,10 +66,9 @@ class DatabaseConfig:
 
     def _should_use_aws_secrets(self) -> bool:
         """Determine if AWS Secrets Manager should be used."""
-        return (
-            AWS_SECRETS_AVAILABLE and
-            (os.getenv("ENVIRONMENT") == "production" or
-             os.getenv("USE_AWS_SECRETS", "false").lower() == "true")
+        return AWS_SECRETS_AVAILABLE and (
+            os.getenv("ENVIRONMENT") == "production"
+            or os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
         )
 
     def _load_from_aws_secrets(self) -> bool:
