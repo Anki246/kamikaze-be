@@ -27,17 +27,17 @@ import pandas as pd
 
 # Optional MCP Protocol imports - gracefully handle if not available
 try:
-    from mcp.server.models import InitializationOptions
-    from mcp.server import NotificationOptions, Server
-    from mcp.types import (
-        Resource,
-        Tool,
-        TextContent,
-        ImageContent,
-        EmbeddedResource,
-        LoggingLevel,
-    )
     import mcp.types as types
+    from mcp.server import NotificationOptions, Server
+    from mcp.server.models import InitializationOptions
+    from mcp.types import (
+        EmbeddedResource,
+        ImageContent,
+        LoggingLevel,
+        Resource,
+        TextContent,
+        Tool,
+    )
 
     MCP_AVAILABLE = True
 except ImportError:
@@ -89,8 +89,8 @@ except ImportError:
 
 # Market data sources
 try:
-    import yfinance as yf
     import ccxt
+    import yfinance as yf
 
     MARKET_DATA_AVAILABLE = True
 except ImportError:

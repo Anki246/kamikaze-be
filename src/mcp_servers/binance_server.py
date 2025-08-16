@@ -37,15 +37,15 @@ import pandas as pd
 
 # Optional MCP imports - gracefully handle if not available
 try:
-    from mcp.server.models import InitializationOptions
     from mcp.server import NotificationOptions, Server
+    from mcp.server.models import InitializationOptions
     from mcp.types import (
-        Resource,
-        Tool,
-        TextContent,
-        ImageContent,
         EmbeddedResource,
+        ImageContent,
         LoggingLevel,
+        Resource,
+        TextContent,
+        Tool,
     )
 
     MCP_AVAILABLE = True
@@ -96,8 +96,8 @@ except ImportError:
 
 # Market data sources for correlation analysis
 try:
-    import yfinance as yf
     import ccxt
+    import yfinance as yf
 
     MARKET_DATA_AVAILABLE = True
 except ImportError:
