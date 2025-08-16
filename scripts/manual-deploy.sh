@@ -24,7 +24,7 @@ echo -e "${BLUE}Target: ${EC2_PUBLIC_IP}${NC}"
 
 # Function to run commands on EC2
 run_on_ec2() {
-    ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_PUBLIC_IP} "$1"
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=yes ${EC2_USER}@${EC2_PUBLIC_IP} "$1"
 }
 
 # Check if we can connect to EC2
