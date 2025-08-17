@@ -44,7 +44,7 @@ permissions:
   id-token: write
 
 env:
-  PYTHON_VERSION: '3.11'
+  PYTHON_VERSION: '3.12'
   AWS_DEFAULT_REGION: 'us-east-1'
   CACHE_VERSION: 'v1'
   # EC2 Configuration
@@ -299,6 +299,36 @@ jobs:
         aws-region: ${{ env.AWS_DEFAULT_REGION }}
       continue-on-error: false
 
+    - name: 📋 Display GitHub Secrets (for verification)
+      run: |
+        echo "📋 GitHub Secrets Retrieved (for AWS Secrets Manager):"
+        echo "🔐 Environment: ${{ needs.branch-detection.outputs.environment }}"
+        echo ""
+        echo "📊 Database Configuration:"
+        echo "  DB_HOST: ${DB_HOST:0:20}... (length: ${#DB_HOST})"
+        echo "  DB_PORT: $DB_PORT"
+        echo "  DB_NAME: $DB_NAME"
+        echo "  DB_USER: $DB_USER"
+        echo "  DB_PASSWORD: ${DB_PASSWORD:0:3}... (length: ${#DB_PASSWORD})"
+        echo ""
+        echo "🔑 AWS Configuration:"
+        echo "  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:0:10}... (length: ${#AWS_ACCESS_KEY_ID})"
+        echo "  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:0:10}... (length: ${#AWS_SECRET_ACCESS_KEY})"
+        echo "  AWS_REGION: $AWS_DEFAULT_REGION"
+        echo ""
+        echo "🔐 SSH Configuration:"
+        echo "  EC2_SSH_PRIVATE_KEY: Available (length: ${#EC2_SSH_PRIVATE_KEY})"
+        echo ""
+      env:
+        DB_HOST: ${{ secrets.DB_HOST }}
+        DB_PORT: ${{ secrets.DB_PORT }}
+        DB_NAME: ${{ secrets.DB_NAME }}
+        DB_USER: ${{ secrets.DB_USER }}
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+
     - name: 🔐 Create/Update AWS Secrets Manager
       run: |
         echo "Creating/updating AWS Secrets Manager with name: kmkz-secrets"
@@ -315,7 +345,7 @@ jobs:
         SECRETS_JSON=$(cat << EOF
         {
           "database": {
-            "staging": {
+            "development": {
               "host": "${{ secrets.DB_HOST }}",
               "port": "${{ secrets.DB_PORT }}",
               "database": "${{ secrets.DB_NAME }}",
@@ -350,7 +380,7 @@ jobs:
             }
           },
           "trading": {
-            "staging": {
+            "development": {
               "binance_api_key": "${{ secrets.BINANCE_API_KEY }}",
               "binance_secret_key": "${{ secrets.BINANCE_SECRET_KEY }}",
               "binance_testnet": true,
@@ -370,7 +400,7 @@ jobs:
             }
           },
           "application": {
-            "staging": {
+            "development": {
               "jwt_secret": "${{ secrets.JWT_SECRET }}",
               "encryption_key": "${{ secrets.ENCRYPTION_KEY }}",
               "credentials_encryption_key": "${{ secrets.CREDENTIALS_ENCRYPTION_KEY }}"
@@ -441,12 +471,12 @@ jobs:
             echo "✅ CI Groq API key: ${CI_GROQ_KEY:0:8}****"
             echo "✅ CI JWT secret: ${CI_JWT_SECRET:0:8}****"
 
-            # Test staging environment secrets
-            STAGING_DB_PASSWORD=$(echo "$SECRET_DATA" | jq -r '.database.staging.password')
-            STAGING_BINANCE_TESTNET=$(echo "$SECRET_DATA" | jq -r '.trading.staging.binance_testnet')
+            # Test development environment secrets
+            development_DB_PASSWORD=$(echo "$SECRET_DATA" | jq -r '.database.development.password')
+            development_BINANCE_TESTNET=$(echo "$SECRET_DATA" | jq -r '.trading.development.binance_testnet')
 
-            echo "✅ Staging DB password length: ${#STAGING_DB_PASSWORD}"
-            echo "✅ Staging Binance testnet: $STAGING_BINANCE_TESTNET"
+            echo "✅ development DB password length: ${#development_DB_PASSWORD}"
+            echo "✅ development Binance testnet: $development_BINANCE_TESTNET"
 
           else
             echo "❌ kmkz-secrets is not accessible"
@@ -670,7 +700,8 @@ jobs:
     name: 🏗️ Build Verification
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [branch-detection, code-quality, aws-secrets-test, unit-tests]
+    needs: [branch-detection, approval, setup, code-quality, aws-secrets-test, unit-tests]
+    if: always() && (needs.branch-detection.outputs.requires_approval == 'false' || needs.approval.result == 'success') && needs.setup.result == 'success'
     environment: ${{ needs.branch-detection.outputs.environment }}
 
     steps:
@@ -789,7 +820,8 @@ jobs:
     name: 🐳 Docker Build & Test
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: [branch-detection, build-verification]
+    needs: [branch-detection, approval, setup, build-verification]
+    if: always() && (needs.branch-detection.outputs.requires_approval == 'false' || needs.approval.result == 'success') && needs.setup.result == 'success'
     environment: ${{ needs.branch-detection.outputs.environment }}
 
     steps:
@@ -972,9 +1004,9 @@ jobs:
           echo "🔄 Continuing with deployment..."
         fi
 
-    - name: � Check and Fix Security Groups
+    - name: 🔒 Comprehensive Security Group Analysis and Fix
       run: |
-        echo "🔒 Checking security groups for SSH access..."
+        echo "🔒 Comprehensive Security Group Analysis..."
 
         # Get security group IDs
         SECURITY_GROUPS=$(aws ec2 describe-instances \
@@ -982,44 +1014,78 @@ jobs:
           --query 'Reservations[0].Instances[0].SecurityGroups[*].GroupId' \
           --output text)
 
-        echo "📋 Security Groups: $SECURITY_GROUPS"
+        echo "📋 Security Groups attached to instance: $SECURITY_GROUPS"
+        echo ""
 
-        # Check each security group for SSH access
+        # Analyze each security group in detail
         SSH_ALLOWED=false
-        for SG_ID in $SECURITY_GROUPS; do
-          echo "🔍 Checking security group: $SG_ID"
+        HTTP_ALLOWED=false
 
-          # Check if SSH (port 22) is allowed from anywhere
+        for SG_ID in $SECURITY_GROUPS; do
+          echo "🔍 Analyzing Security Group: $SG_ID"
+
+          echo "📊 Current Inbound Rules for $SG_ID:"
+          aws ec2 describe-security-groups \
+            --group-ids $SG_ID \
+            --query 'SecurityGroups[0].IpPermissions[*].{Protocol:IpProtocol,FromPort:FromPort,ToPort:ToPort,Source:IpRanges[0].CidrIp}' \
+            --output table || echo "Failed to get rules"
+
+          # Check for SSH (port 22)
           SSH_RULES=$(aws ec2 describe-security-groups \
             --group-ids $SG_ID \
             --query 'SecurityGroups[0].IpPermissions[?FromPort==`22` && ToPort==`22`]' \
             --output text 2>/dev/null || echo "")
 
           if [ -n "$SSH_RULES" ]; then
-            echo "✅ SSH access found in security group $SG_ID"
+            echo "✅ SSH (port 22) access found in $SG_ID"
             SSH_ALLOWED=true
-            break
           fi
+
+          # Check for HTTP (port 8000)
+          HTTP_RULES=$(aws ec2 describe-security-groups \
+            --group-ids $SG_ID \
+            --query 'SecurityGroups[0].IpPermissions[?FromPort==`8000` && ToPort==`8000`]' \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$HTTP_RULES" ]; then
+            echo "✅ HTTP (port 8000) access found in $SG_ID"
+            HTTP_ALLOWED=true
+          fi
+
+          echo ""
         done
 
+        # Fix missing rules
+        FIRST_SG=$(echo $SECURITY_GROUPS | awk '{print $1}')
+        echo "🔧 Using security group for fixes: $FIRST_SG"
+
         if [ "$SSH_ALLOWED" = "false" ]; then
-          echo "⚠️  No SSH access found in security groups"
-          echo "🔧 Adding SSH access to first security group..."
-
-          FIRST_SG=$(echo $SECURITY_GROUPS | awk '{print $1}')
-          echo "📝 Adding SSH rule to security group: $FIRST_SG"
-
-          # Add SSH access rule
+          echo "🔧 Adding SSH (port 22) access rule..."
           aws ec2 authorize-security-group-ingress \
             --group-id $FIRST_SG \
             --protocol tcp \
             --port 22 \
-            --cidr 0.0.0.0/0 2>/dev/null || echo "⚠️  SSH rule may already exist or failed to add"
-
-          echo "✅ SSH access rule added"
-        else
-          echo "✅ SSH access is properly configured"
+            --cidr 0.0.0.0/0 2>/dev/null && echo "✅ SSH rule added" || echo "⚠️  SSH rule may already exist"
         fi
+
+        if [ "$HTTP_ALLOWED" = "false" ]; then
+          echo "🔧 Adding HTTP (port 8000) access rule..."
+          aws ec2 authorize-security-group-ingress \
+            --group-id $FIRST_SG \
+            --protocol tcp \
+            --port 8000 \
+            --cidr 0.0.0.0/0 2>/dev/null && echo "✅ HTTP rule added" || echo "⚠️  HTTP rule may already exist"
+        fi
+
+        echo ""
+        echo "📊 Final Security Group Configuration:"
+        for SG_ID in $SECURITY_GROUPS; do
+          echo "Security Group: $SG_ID"
+          aws ec2 describe-security-groups \
+            --group-ids $SG_ID \
+            --query 'SecurityGroups[0].IpPermissions[*].{Protocol:IpProtocol,FromPort:FromPort,ToPort:ToPort,Source:IpRanges[0].CidrIp}' \
+            --output table || echo "Failed to get final rules"
+        done
 
     - name: ��🔄 Run Database Migration (if needed)
       env:
