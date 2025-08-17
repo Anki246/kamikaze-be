@@ -210,9 +210,10 @@ class AuthDatabase:
                     ) VALUES (
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
                     )
+                    RETURNING id
                 """
 
-                await conn.execute(
+                result = await conn.fetchrow(
                     query,
                     session_data["session_id"],
                     session_data["user_id"],
@@ -229,6 +230,7 @@ class AuthDatabase:
                     session_data["last_activity"],
                     session_data["expires_at"],
                 )
+                logger.info(f"✅ Created session with ID: {result['id']}")
                 return True
 
         except Exception as e:
@@ -335,6 +337,22 @@ class AuthDatabase:
 
         except Exception as e:
             logger.error(f"Failed to revoke user sessions: {e}")
+            return False
+
+    async def cleanup_expired_sessions(self, user_id: int) -> bool:
+        """Clean up expired sessions for a user."""
+        try:
+            async with self.get_connection() as conn:
+                query = """
+                    DELETE FROM user_sessions
+                    WHERE user_id = $1 AND (expires_at < NOW() OR is_revoked = true)
+                """
+                result = await conn.execute(query, user_id)
+                logger.info(f"🧹 Cleaned up expired sessions for user {user_id}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to cleanup expired sessions: {e}")
             return False
 
 

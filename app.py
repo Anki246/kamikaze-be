@@ -97,6 +97,8 @@ class FluxTraderBackend:
 
             # Start the MCP server process with environment variables
             env = os.environ.copy()  # Copy current environment including .env variables
+            src_path = str(Path(__file__).parent / "src")
+            env["PYTHONPATH"] = src_path  # Add src to Python path
             self.mcp_server_process = subprocess.Popen(
                 [sys.executable, str(mcp_server_path)],
                 stdout=subprocess.PIPE,

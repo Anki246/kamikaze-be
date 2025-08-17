@@ -27,9 +27,10 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field
 
-from shared.logging_config import setup_logging
+from ..shared.logging_config import setup_logging
 
 # User Context middleware - CRITICAL: Add dynamic user context system
 from .middleware.user_context_middleware import UserContextMiddleware
@@ -156,12 +157,16 @@ async def lifespan(app: FastAPI):
     logger.info("✅ FluxTrader Backend shutdown complete")
 
 
-# Create FastAPI app
+# Create FastAPI app with authentication UI
 app = FastAPI(
     title="FluxTrader Agentic AI API",
     description="Modern multi-agent trading system with real-time capabilities",
     version="2.0.0",
     lifespan=lifespan,
+    # Add authentication UI to Swagger
+    swagger_ui_init_oauth={
+        "usePkceWithAuthorizationCodeGrant": True,
+    },
 )
 
 # CORS middleware
@@ -175,6 +180,71 @@ app.add_middleware(
 
 
 app.add_middleware(UserContextMiddleware)
+
+# Add security scheme for Swagger UI
+security = HTTPBearer()
+
+# Configure OpenAPI security scheme
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    from fastapi.openapi.utils import get_openapi
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    # Add security scheme
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Enter your Bearer token in the format: Bearer <token>"
+        }
+    }
+
+    # Add security to all protected endpoints
+    for path, path_item in openapi_schema["paths"].items():
+        for method, operation in path_item.items():
+            if method in ["get", "post", "put", "delete", "patch"]:
+                # Check if this endpoint requires authentication
+                if any("Authorization" in str(param) for param in operation.get("parameters", [])) or \
+                   any("HTTPAuthorizationCredentials" in str(dep) for dep in operation.get("dependencies", [])):
+                    operation["security"] = [{"BearerAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+# Simple login endpoint for Swagger UI testing
+@app.post("/auth/login", tags=["Authentication"], summary="Simple login for Swagger UI")
+async def simple_login(email: str, password: str):
+    """
+    Simple login endpoint that returns just the access token for easy copy-paste into Swagger UI.
+    Use this for testing in Swagger UI - just copy the returned token and paste it in the Authorize button.
+    """
+    from src.api.routes.auth_routes import signin
+    from pydantic import BaseModel
+
+    class LoginRequest(BaseModel):
+        email: str
+        password: str
+
+    request = LoginRequest(email=email, password=password)
+    result = await signin(request)
+
+    if result.get("success"):
+        return {
+            "access_token": result["access_token"],
+            "instructions": "Copy this token and paste it in the 'Authorize' button above (include 'Bearer ' prefix)"
+        }
+    else:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
 # Include routers
 app.include_router(database_router)

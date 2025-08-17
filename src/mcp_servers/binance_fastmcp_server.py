@@ -24,6 +24,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Add src directory to Python path for imports
+current_dir = Path(__file__).parent
+src_dir = current_dir.parent
+sys.path.insert(0, str(src_dir))
+
 import aiohttp
 import numpy as np
 from pydantic import BaseModel, Field

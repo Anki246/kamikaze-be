@@ -148,21 +148,63 @@ async def get_current_user(
             logger.warning("No user ID found in token payload")
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
-        # Get user from database
-        logger.debug(f"Looking up user with ID: {user_id}")
-        user = await auth_db.get_user_by_id(int(user_id))
-        if not user:
-            logger.warning(f"User not found with ID: {user_id}")
-            raise HTTPException(status_code=401, detail="User not found")
+        # Validate token exists in database and is active
+        logger.debug(f"Validating token in database for user ID: {user_id}")
+        async with auth_db.get_connection() as conn:
+            session_query = """
+                SELECT s.*, u.id, u.uuid, u.username, u.email, u.full_name,
+                       u.is_active, u.is_verified, u.is_superuser, u.role,
+                       u.trading_experience, u.risk_tolerance, u.preferred_markets,
+                       u.avatar_url, u.bio, u.timezone, u.created_at,
+                       u.updated_at, u.last_login, u.rate_limit_override, u.phone_number
+                FROM user_sessions s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.access_token = $1
+                  AND s.user_id = $2
+                  AND s.is_active = true
+                  AND s.is_revoked = false
+                  AND s.expires_at > NOW()
+                  AND u.is_active = true
+            """
+            result = await conn.fetchrow(session_query, token, int(user_id))
 
-        if not user.get("is_active", True):
-            logger.warning(f"User account disabled for ID: {user_id}")
-            raise HTTPException(status_code=401, detail="User account is disabled")
+        if not result:
+            logger.warning(f"Token not found in database or expired for user ID: {user_id}")
+            raise HTTPException(status_code=401, detail="Token not found or expired")
 
-        # Remove sensitive information
-        user.pop("hashed_password", None)
-        logger.debug(f"Successfully authenticated user: {user.get('email', 'unknown')}")
-        return user
+        # Update last activity
+        async with auth_db.get_connection() as conn:
+            await conn.execute(
+                "UPDATE user_sessions SET last_activity = NOW() WHERE access_token = $1",
+                token
+            )
+
+        # Convert to dict and handle datetime serialization
+        user_dict = {
+            "id": result["id"],
+            "uuid": str(result["uuid"]),
+            "username": result["username"],
+            "email": result["email"],
+            "full_name": result["full_name"],
+            "is_active": result["is_active"],
+            "is_verified": result["is_verified"],
+            "is_superuser": result["is_superuser"],
+            "role": result["role"],
+            "trading_experience": result["trading_experience"],
+            "risk_tolerance": result["risk_tolerance"],
+            "preferred_markets": result["preferred_markets"],
+            "avatar_url": result["avatar_url"],
+            "bio": result["bio"],
+            "timezone": result["timezone"],
+            "created_at": result["created_at"].isoformat() if result["created_at"] else None,
+            "updated_at": result["updated_at"].isoformat() if result["updated_at"] else None,
+            "last_login": result["last_login"].isoformat() if result["last_login"] else None,
+            "rate_limit_override": result["rate_limit_override"],
+            "phone_number": result["phone_number"]
+        }
+
+        logger.debug(f"Successfully authenticated user: {user_dict.get('email', 'unknown')}")
+        return user_dict
 
     except HTTPException:
         raise
@@ -303,6 +345,9 @@ async def sign_in(request: SignInRequest, req: Request):
 
         # Update last login
         await auth_db.update_user_login(user_id, datetime.now(timezone.utc))
+
+        # Clean up expired sessions for this user
+        await auth_db.cleanup_expired_sessions(user_id)
 
         # Create tokens
         access_token = create_access_token(data={"sub": str(user_id)})

@@ -45,10 +45,10 @@ class DatabaseConfig:
 
     def __post_init__(self):
         """Load configuration from AWS Secrets Manager or environment variables."""
-        # Try AWS Secrets Manager first if in production environment
+        # PRIORITY 1: Always try AWS Secrets Manager first
         if self._should_use_aws_secrets():
             logger.info(
-                "🔐 Attempting to load database configuration from AWS Secrets Manager"
+                "🔐 Priority 1: Attempting to load database configuration from AWS Secrets Manager"
             )
             if self._load_from_aws_secrets():
                 logger.info(
@@ -56,51 +56,56 @@ class DatabaseConfig:
                 )
                 return
             else:
-                logger.warning(
-                    "⚠️  Failed to load from AWS Secrets Manager, falling back to environment variables"
+                logger.info(
+                    "🔄 AWS Secrets Manager failed, falling back to localhost database"
                 )
 
-        # Fallback to environment variables
-        logger.info("🔧 Loading database configuration from environment variables")
+        # PRIORITY 2: Fallback to localhost database with environment variables
+        logger.info("🔧 Priority 2: Loading localhost database configuration from environment variables")
         self._load_from_environment()
 
     def _should_use_aws_secrets(self) -> bool:
         """Determine if AWS Secrets Manager should be used."""
-        # Use AWS Secrets Manager if:
-        # 1. Available and explicitly enabled, OR
-        # 2. Running in production environment (GitHub Actions) with RDS
-        environment = os.getenv("ENVIRONMENT", "development")
-        github_actions = os.getenv("GITHUB_ACTIONS", "false").lower() == "true"
-        use_aws_secrets = os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
-        has_rds_host = os.getenv("DB_HOST", "").endswith(".rds.amazonaws.com")
-
-        return AWS_SECRETS_AVAILABLE and (
-            use_aws_secrets
-            or (environment == "production" and (github_actions or has_rds_host))
-        )
+        # PRIORITY: Always try AWS Secrets Manager first if available
+        # Fall back to localhost only if AWS Secrets Manager fails
+        return AWS_SECRETS_AVAILABLE
 
     def _load_from_aws_secrets(self) -> bool:
         """Load database configuration from AWS Secrets Manager."""
         try:
+            import asyncio
+            import concurrent.futures
             secrets_manager = AWSSecretsManager()
-            db_credentials = secrets_manager.get_database_credentials()
+
+            # Use thread pool to run async function
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(self._run_async_secrets_fetch, secrets_manager)
+                db_credentials = future.result(timeout=30)  # 30 second timeout
 
             if db_credentials:
-                self.host = db_credentials.get("host", self.host)
-                self.port = int(db_credentials.get("port", self.port))
-                self.database = db_credentials.get("database", self.database)
-                self.user = db_credentials.get("username", self.user)
-                self.password = db_credentials.get("password", self.password)
+                self.host = db_credentials.host
+                self.port = db_credentials.port
+                self.database = db_credentials.database
+                self.user = db_credentials.username
+                self.password = db_credentials.password
+                self.ssl_mode = db_credentials.ssl_mode
 
-                # Use SSL for RDS connections
-                if self.host != "localhost":
-                    self.ssl_mode = "require"
-
+                logger.info(f"✅ Loaded AWS RDS config: {self.host}:{self.port}/{self.database}")
                 return True
         except Exception as e:
             logger.error(f"❌ Error loading from AWS Secrets Manager: {e}")
 
         return False
+
+    def _run_async_secrets_fetch(self, secrets_manager):
+        """Run async secrets fetch in a new event loop."""
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(secrets_manager.get_database_credentials())
+        finally:
+            loop.close()
 
     def _load_from_environment(self):
         """Load configuration from environment variables."""
@@ -145,32 +150,56 @@ class DatabaseConfig:
             "DB_SSL_MODE", os.getenv("POSTGRES_SSL_MODE", self.ssl_mode)
         )
 
-        # Validate that password is provided (allow empty for development)
+        # Handle password for localhost vs production
         environment = os.getenv("ENVIRONMENT", "development")
-        if not self.password and environment == "production":
-            raise ValueError(
-                "Database password must be provided via DB_PASSWORD environment variable in production"
-            )
-        elif not self.password:
-            logger.warning(
-                "⚠️  No database password provided - using empty password for development"
-            )
-            self.password = ""
+
+        if not self.password:
+            if self.host == "localhost":
+                # For localhost, use the known password for development
+                logger.info("🔧 Localhost database detected - using development password")
+                self.password = "admin2025"  # Known localhost password
+            elif environment == "production":
+                raise ValueError(
+                    "Database password must be provided via DB_PASSWORD environment variable in production"
+                )
+            else:
+                logger.warning(
+                    "⚠️  No database password provided - using empty password for development"
+                )
+                self.password = ""
+
+    def get_password_for_connection(self) -> str:
+        """Get password for database connection, prompting if needed for localhost."""
+        if self.password is not None:
+            return self.password
+
+        if self.host == "localhost":
+            try:
+                import getpass
+                password = getpass.getpass(f"🔐 Enter password for PostgreSQL user '{self.user}' on localhost: ")
+                return password
+            except (ImportError, KeyboardInterrupt):
+                logger.warning("⚠️ Password prompt failed, using empty password")
+                return ""
+
+        return ""
 
     @property
     def connection_string(self) -> str:
         """Get PostgreSQL connection string."""
-        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+        password = self.get_password_for_connection()
+        return f"postgresql://{self.user}:{password}@{self.host}:{self.port}/{self.database}"
 
     @property
     def connection_params(self) -> dict:
         """Get connection parameters for asyncpg."""
+        password = self.get_password_for_connection()
         return {
             "host": self.host,
             "port": self.port,
             "database": self.database,
             "user": self.user,
-            "password": self.password,
+            "password": password,
             "min_size": self.min_pool_size,
             "max_size": self.max_pool_size,
             "command_timeout": self.command_timeout,

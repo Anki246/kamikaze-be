@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from agents.fluxtrader.fastmcp_client import FluxTraderMCPClient
+from ...agents.fluxtrader.fastmcp_client import FluxTraderMCPClient
 
 # Add src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -22,8 +23,20 @@ logger = logging.getLogger(__name__)
 # Create router
 router = APIRouter(prefix="/api/database", tags=["Database"])
 
+# Security scheme
+security = HTTPBearer()
+
 # Global PostgreSQL MCP client
 postgres_client: Optional[FluxTraderMCPClient] = None
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Get current authenticated user for database operations."""
+    # Import here to avoid circular imports
+    from .auth_routes import get_current_user as auth_get_current_user
+    return await auth_get_current_user(credentials)
 
 
 async def create_postgres_client(
@@ -64,20 +77,47 @@ async def get_postgres_client() -> FluxTraderMCPClient:
 
 
 @router.get("/health")
-async def get_database_health() -> Dict[str, Any]:
+async def get_database_health(
+    current_user: Dict = Depends(get_current_user)
+) -> Dict[str, Any]:
     """Get database health information."""
     try:
-        # Get PostgreSQL MCP client
-        client = await get_postgres_client()
+        # Use direct database connection instead of MCP server
+        from ...infrastructure.auth_database import auth_db
+        from ...infrastructure.database_config import DatabaseConfig
 
-        # Call the health check tool
-        result = await client.call_tool("get_database_health", {})
+        # Ensure database connection
+        if not await auth_db.ensure_connected():
+            raise HTTPException(status_code=503, detail="Database connection failed")
 
-        return {
-            "success": True,
-            "data": result,
-            "message": "Database health retrieved successfully",
-        }
+        # Get database configuration
+        db_config = DatabaseConfig()
+
+        # Test database with a simple query
+        health_query = "SELECT version() as version, current_database() as database, current_user as user"
+
+        # Use the connection pattern from auth_db
+        async with auth_db.get_connection() as conn:
+            result = await conn.fetchrow(health_query)
+
+        if result:
+            db_info = result
+            return {
+                "success": True,
+                "data": {
+                    "status": "healthy",
+                    "host": db_config.host,
+                    "port": db_config.port,
+                    "database": db_info.get("database"),
+                    "user": db_info.get("user"),
+                    "version": db_info.get("version"),
+                    "connection_source": "aws_secrets" if db_config.host != "localhost" else "environment",
+                    "ssl_mode": db_config.ssl_mode
+                },
+                "message": "Database health retrieved successfully",
+            }
+        else:
+            raise HTTPException(status_code=503, detail="Database query returned no results")
 
     except Exception as e:
         logger.error(f"Failed to get database health: {e}")
@@ -87,18 +127,49 @@ async def get_database_health() -> Dict[str, Any]:
 
 
 @router.get("/tables")
-async def list_tables() -> Dict[str, Any]:
+async def list_tables(
+    current_user: Dict = Depends(get_current_user)
+) -> Dict[str, Any]:
     """List all tables in the database."""
     try:
-        # Get PostgreSQL MCP client
-        client = await get_postgres_client()
+        # Use direct database connection instead of MCP server
+        from ...infrastructure.auth_database import auth_db
 
-        # Call the list tables tool
-        result = await client.call_tool("list_tables", {})
+        # Ensure database connection
+        if not await auth_db.ensure_connected():
+            raise HTTPException(status_code=503, detail="Database connection failed")
+
+        # Query to get all tables in public schema
+        query = """
+            SELECT
+                table_name,
+                table_type,
+                table_schema
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """
+
+        # Use the connection pattern from auth_db
+        async with auth_db.get_connection() as conn:
+            result = await conn.fetch(query)
+
+        # Format the result
+        tables = []
+        if result:
+            for row in result:
+                tables.append({
+                    "name": row["table_name"],
+                    "type": row["table_type"],
+                    "schema": row["table_schema"]
+                })
 
         return {
             "success": True,
-            "data": result,
+            "data": {
+                "tables": tables,
+                "count": len(tables)
+            },
             "message": "Tables listed successfully",
         }
 

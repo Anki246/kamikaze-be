@@ -30,13 +30,13 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 # Import base agent and multi-agent system components
-from agents.base_agent import AgentMetadata, AgentStatus, BaseAgent, StrategyType
+from ..base_agent import AgentMetadata, AgentStatus, BaseAgent, StrategyType
 
 # Import FluxTrader-specific configuration
-from agents.fluxtrader.config import config
+from .config import config
 
 # Import FastMCP client for enhanced MCP integration
-from agents.fluxtrader.fastmcp_client import FluxTraderMCPClient, create_binance_client
+from .fastmcp_client import FluxTraderMCPClient, create_binance_client
 from shared.constants import API_ENDPOINTS, DEFAULT_CONFIG, TRADING_PAIRS
 from shared.logging_config import setup_logging
 from shared.utils import (

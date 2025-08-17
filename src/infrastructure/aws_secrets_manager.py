@@ -106,22 +106,121 @@ class SecretsManager:
         self._cache = {}
         self._cache_ttl = {}
         self.cache_duration = timedelta(minutes=15)  # Cache secrets for 15 minutes
+        self._use_mock = False
+        self._mock_manager = None
+        self._auto_credentials = None
 
         # Initialize AWS client if available
         if AWS_AVAILABLE:
-            try:
-                self.client = boto3.client(
-                    "secretsmanager", region_name=self.region_name
-                )
-                logger.info(
-                    f"✅ AWS Secrets Manager client initialized for region: {self.region_name}"
-                )
-            except (NoCredentialsError, Exception) as e:
-                logger.warning(f"⚠️ AWS Secrets Manager not available: {e}")
-                logger.info("📝 Falling back to environment variables")
-                self.client = None
+            self.client = self._initialize_aws_client()
         else:
             logger.warning("⚠️ boto3 not installed, using environment variables only")
+            self.client = None
+
+    def _initialize_aws_client(self):
+        """Initialize AWS client with multiple credential sources."""
+        try:
+            # Method 1: Try with existing credentials (env vars, profiles, IAM roles)
+            client = boto3.client("secretsmanager", region_name=self.region_name)
+            # Test the client with a simple operation
+            client.list_secrets(MaxResults=1)
+            logger.info(f"✅ AWS Secrets Manager client initialized for region: {self.region_name}")
+            return client
+
+        except (NoCredentialsError, Exception) as e:
+            logger.debug(f"Standard AWS credentials not found: {e}")
+
+            # Method 2: Try auto-fetch from kmkz-app-secrets
+            try:
+                if self._try_auto_credentials():
+                    logger.info("✅ AWS credentials auto-fetched from kmkz-app-secrets")
+                    return self.client
+            except Exception as auto_e:
+                logger.debug(f"Auto-credential fetch failed: {auto_e}")
+
+            # Method 3: Check for AWS CLI configuration
+            try:
+                import os
+                aws_config_dir = os.path.expanduser("~/.aws")
+                if os.path.exists(os.path.join(aws_config_dir, "credentials")) or os.path.exists(os.path.join(aws_config_dir, "config")):
+                    # Try again with default profile
+                    session = boto3.Session()
+                    client = session.client("secretsmanager", region_name=self.region_name)
+                    client.list_secrets(MaxResults=1)
+                    logger.info("✅ AWS Secrets Manager client initialized using AWS CLI configuration")
+                    return client
+            except Exception as cli_e:
+                logger.debug(f"AWS CLI configuration failed: {cli_e}")
+
+            logger.info("🔄 AWS credentials not available, will use environment variables for fallback")
+            return None
+
+    def _try_auto_credentials(self) -> bool:
+        """Try to auto-fetch AWS credentials from kmkz-app-secrets."""
+        try:
+            # Check if we have any AWS credentials available through other means
+            # (e.g., IAM role, instance profile, etc.)
+            import boto3
+
+            # Try to create a session with default credential chain
+            session = boto3.Session()
+            credentials = session.get_credentials()
+
+            if credentials:
+                # Create a temporary client to fetch app secrets
+                temp_client = boto3.client(
+                    "secretsmanager",
+                    region_name=self.region_name,
+                    aws_access_key_id=credentials.access_key,
+                    aws_secret_access_key=credentials.secret_key,
+                    aws_session_token=credentials.token
+                )
+
+                # Try to get kmkz-app-secrets
+                response = temp_client.get_secret_value(SecretId="kmkz-app-secrets")
+                secret_data = json.loads(response["SecretString"])
+
+                # Extract AWS credentials from the secret
+                aws_config = secret_data.get("aws", {})
+                if aws_config.get("access_key_id") and aws_config.get("secret_access_key"):
+                    # Store auto-fetched credentials
+                    self._auto_credentials = {
+                        "access_key_id": aws_config["access_key_id"],
+                        "secret_access_key": aws_config["secret_access_key"],
+                        "session_token": aws_config.get("session_token")
+                    }
+
+                    # Create new client with auto-fetched credentials
+                    self.client = boto3.client(
+                        "secretsmanager",
+                        region_name=self.region_name,
+                        aws_access_key_id=self._auto_credentials["access_key_id"],
+                        aws_secret_access_key=self._auto_credentials["secret_access_key"],
+                        aws_session_token=self._auto_credentials.get("session_token")
+                    )
+
+                    return True
+
+        except Exception as e:
+            logger.debug(f"Auto-credential fetch failed: {e}")
+
+        return False
+
+    def _get_credentials_from_env(self) -> Optional[Dict[str, Any]]:
+        """Get AWS credentials from environment variables as fallback."""
+        access_key = os.getenv("AWS_ACCESS_KEY_ID")
+        secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        session_token = os.getenv("AWS_SESSION_TOKEN")
+
+        if access_key and secret_key:
+            return {
+                "access_key_id": access_key,
+                "secret_access_key": secret_key,
+                "session_token": session_token,
+                "groq_api_key": os.getenv("GROQ_API_KEY"),
+                "credentials_encryption_key": os.getenv("CREDENTIALS_ENCRYPTION_KEY", "dev-fallback-key")
+            }
+        return None
 
     def _is_cache_valid(self, key: str) -> bool:
         """Check if cached secret is still valid."""
@@ -157,7 +256,7 @@ class SecretsManager:
         try:
             # Use direct secret name for kamikaze-be secrets
             # Check if it's a direct AWS secret name or environment-specific
-            if secret_name in ["kmkz-secrets", "kmkz-db-secrets", "kmkz-app-secrets", "main"]:
+            if secret_name in ["kmkz-db-secrets", "kmkz-app-secrets", "main"]:
                 full_secret_name = secret_name
             else:
                 full_secret_name = f"kamikaze-be/{self.environment}/{secret_name}"
@@ -195,7 +294,7 @@ class SecretsManager:
         Get database credentials from AWS Secrets Manager or environment variables.
 
         Tries to retrieve credentials from kmkz-db-secrets first, then falls back
-        to legacy kmkz-secrets format, and finally environment variables.
+        to environment variables.
 
         Args:
             database_name: Name of the database configuration
@@ -228,34 +327,7 @@ class SecretsManager:
                 f"Failed to get database credentials from kmkz-db-secrets: {e}"
             )
 
-        # Fallback: Try legacy kmkz-secrets format
-        try:
-            secret_value = await self._get_secret_value("kmkz-secrets")
-
-            if secret_value:
-                # Try direct database config first
-                db_config = secret_value.get("database", {})
-                if db_config and not isinstance(db_config, dict) or not db_config:
-                    # Try environment-specific config
-                    db_config = secret_value.get("database", {}).get(self.environment, {})
-
-                if db_config:
-                    logger.info(
-                        f"✅ Using database credentials from AWS Secrets Manager (kmkz-secrets)"
-                    )
-                    return DatabaseCredentials(
-                        host=db_config.get("host", "localhost"),
-                        port=int(db_config.get("port", 5432)),
-                        database=db_config.get("name", db_config.get("database", "kamikaze")),
-                        username=db_config.get("username", "postgres"),
-                        password=db_config.get("password", ""),
-                        ssl_mode=db_config.get("ssl_mode", "prefer"),
-                        min_size=int(db_config.get("min_size", 5)),
-                        max_size=int(db_config.get("max_size", 20)),
-                        timeout=int(db_config.get("timeout", 60)),
-                    )
-        except Exception as e:
-            logger.warning(f"Failed to get database credentials from kmkz-secrets: {e}")
+        # No fallback to kmkz-secrets - removed as requested
 
         # Fallback to environment variables
         logger.info("📝 Using database credentials from environment variables")
@@ -278,9 +350,9 @@ class SecretsManager:
         Returns:
             TradingAPIKeys object
         """
-        # Try AWS Secrets Manager first using kmkz-secrets
+        # Try AWS Secrets Manager using kmkz-app-secrets
         try:
-            secret_value = await self._get_secret_value("kmkz-secrets")
+            secret_value = await self._get_secret_value("kmkz-app-secrets")
 
             if secret_value:
                 trading_config = secret_value.get("trading", {}).get(
@@ -289,7 +361,7 @@ class SecretsManager:
 
                 if trading_config:
                     logger.info(
-                        f"✅ Using trading API keys from AWS Secrets Manager (kmkz-secrets/{self.environment})"
+                        f"✅ Using trading API keys from AWS Secrets Manager (kmkz-app-secrets/{self.environment})"
                     )
                     return TradingAPIKeys(
                         binance_api_key=trading_config.get("binance_api_key"),
@@ -299,7 +371,7 @@ class SecretsManager:
                         openai_api_key=trading_config.get("openai_api_key"),
                     )
         except Exception as e:
-            logger.warning(f"Failed to get trading API keys from kmkz-secrets: {e}")
+            logger.warning(f"Failed to get trading API keys from kmkz-app-secrets: {e}")
 
         # Try to get Groq API key from AWS credentials as fallback
         groq_api_key = os.getenv("GROQ_API_KEY")
@@ -340,9 +412,9 @@ class SecretsManager:
         Returns:
             ApplicationSecrets object
         """
-        # Try AWS Secrets Manager first using kmkz-secrets
+        # Try AWS Secrets Manager first using kmkz-app-secrets
         try:
-            secret_value = await self._get_secret_value("kmkz-secrets")
+            secret_value = await self._get_secret_value("kmkz-app-secrets")
 
             if secret_value:
                 app_config = secret_value.get("application", {}).get(
@@ -351,7 +423,7 @@ class SecretsManager:
 
                 if app_config:
                     logger.info(
-                        f"✅ Using application secrets from AWS Secrets Manager (kmkz-secrets/{self.environment})"
+                        f"✅ Using application secrets from AWS Secrets Manager (kmkz-app-secrets/{self.environment})"
                     )
                     return ApplicationSecrets(
                         jwt_secret=app_config.get(
@@ -366,7 +438,7 @@ class SecretsManager:
                         webhook_secret=app_config.get("webhook_secret"),
                     )
         except Exception as e:
-            logger.warning(f"Failed to get application secrets from kmkz-secrets: {e}")
+            logger.warning(f"Failed to get application secrets from kmkz-app-secrets: {e}")
 
         # Try to get credentials encryption key from AWS credentials as fallback
         credentials_encryption_key = os.getenv("CREDENTIALS_ENCRYPTION_KEY")
@@ -667,7 +739,7 @@ def get_kmkz_app_secret():
 
 
 # Alias for backward compatibility
-SecretsManager = AWSSecretsManager
+AWSSecretsManager = SecretsManager
 
 
 if __name__ == "__main__":
