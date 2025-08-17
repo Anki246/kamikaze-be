@@ -773,7 +773,7 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-    - name: 🔑 Setup SSH key for EC2 (if available)
+    - name: 🔑 Setup SSH key for EC2
       run: |
         mkdir -p ~/.ssh
         if [ -n "${{ secrets.EC2_SSH_PRIVATE_KEY }}" ]; then
@@ -782,30 +782,28 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H 34.238.167.174 >> ~/.ssh/known_hosts
           echo "SSH_KEY_AVAILABLE=true" >> $GITHUB_ENV
+          echo "✅ SSH key configured successfully"
         else
-          echo "No SSH key found in secrets, will try alternative methods..."
+          echo "❌ No SSH key found in secrets"
+          echo "💡 Please add EC2_SSH_PRIVATE_KEY to GitHub secrets"
           echo "SSH_KEY_AVAILABLE=false" >> $GITHUB_ENV
+          exit 1
         fi
 
-    - name: 🚀 Deploy to EC2
+    - name: 🚀 Deploy Kamikaze-be to EC2
       env:
         ENVIRONMENT: production
-        USE_AWS_SECRETS: true
+        USE_AWS_SECRETS: false
         AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
-        DB_HOST: ${{ secrets.DB_HOST }}
-        DB_PORT: ${{ secrets.DB_PORT }}
-        DB_NAME: ${{ secrets.DB_NAME }}
-        DB_USER: ${{ secrets.DB_USER }}
-        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        DB_HOST: ${{ secrets.DB_HOST || 'localhost' }}
+        DB_PORT: ${{ secrets.DB_PORT || '5432' }}
+        DB_NAME: ${{ secrets.DB_NAME || 'kamikaze' }}
+        DB_USER: ${{ secrets.DB_USER || 'postgres' }}
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD || 'admin2025' }}
       run: |
-        chmod +x scripts/deploy-to-ec2.sh scripts/deploy-via-aws-ssm.sh
-        if [ "$SSH_KEY_AVAILABLE" = "true" ]; then
-          echo "🔑 Using SSH key deployment..."
-          ./scripts/deploy-to-ec2.sh
-        else
-          echo "🔧 Using AWS Systems Manager deployment..."
-          ./scripts/deploy-via-aws-ssm.sh
-        fi
+        chmod +x scripts/deploy-to-ec2.sh
+        echo "🚀 Deploying Kamikaze-be using SSH key..."
+        ./scripts/deploy-to-ec2.sh
 
     - name: 🏥 Health Check
       run: |

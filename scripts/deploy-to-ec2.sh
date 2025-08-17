@@ -25,12 +25,24 @@ echo -e "${BLUE}Instance: ${EC2_INSTANCE_ID} (${EC2_PUBLIC_IP})${NC}"
 
 # Function to run commands on EC2
 run_on_ec2() {
-    ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_PUBLIC_IP} "$1"
+    if [ -f ~/.ssh/id_rsa ]; then
+        # Use SSH key from GitHub secrets
+        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa ${EC2_USER}@${EC2_PUBLIC_IP} "$1"
+    else
+        # Fallback to default SSH
+        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${EC2_USER}@${EC2_PUBLIC_IP} "$1"
+    fi
 }
 
 # Function to copy files to EC2
 copy_to_ec2() {
-    scp -o StrictHostKeyChecking=no "$1" ${EC2_USER}@${EC2_PUBLIC_IP}:"$2"
+    if [ -f ~/.ssh/id_rsa ]; then
+        # Use SSH key from GitHub secrets
+        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/id_rsa "$1" ${EC2_USER}@${EC2_PUBLIC_IP}:"$2"
+    else
+        # Fallback to default SCP
+        scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$1" ${EC2_USER}@${EC2_PUBLIC_IP}:"$2"
+    fi
 }
 
 # Check if EC2 instance is accessible
