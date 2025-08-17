@@ -143,8 +143,12 @@ class SecretsManager:
             return None
 
         try:
-            # Construct environment-specific secret name
-            full_secret_name = f"fluxtrader/{self.environment}/{secret_name}"
+            # Use direct secret name for kamikaze-be (kmkz-secrets)
+            # Check if it's the main secret or environment-specific
+            if secret_name == "kmkz-secrets" or secret_name == "main":
+                full_secret_name = "kmkz-secrets"
+            else:
+                full_secret_name = f"kamikaze-be/{self.environment}/{secret_name}"
 
             logger.debug(f"🔍 Retrieving secret: {full_secret_name}")
             response = self.client.get_secret_value(SecretId=full_secret_name)
@@ -184,22 +188,22 @@ class SecretsManager:
         Returns:
             DatabaseCredentials object
         """
-        # Try AWS Secrets Manager first using kmkz-database (RDS secret)
+        # Try AWS Secrets Manager first using kmkz-secrets
         try:
-            secret_value = await self._get_secret_value("kmkz-database")
+            secret_value = await self._get_secret_value("kmkz-secrets")
 
             if secret_value:
                 logger.info(
-                    "✅ Using database credentials from AWS Secrets Manager (kmkz-database)"
+                    "✅ Using database credentials from AWS Secrets Manager (kmkz-secrets)"
                 )
+                # Extract database configuration from the nested structure
+                db_config = secret_value.get("database", {})
                 return DatabaseCredentials(
-                    host=secret_value.get("host", "localhost"),
-                    port=int(secret_value.get("port", 5432)),
-                    database=secret_value.get(
-                        "dbname", secret_value.get("database", "kamikaze")
-                    ),
-                    username=secret_value.get("username", "postgres"),
-                    password=secret_value.get("password", ""),
+                    host=db_config.get("host", "localhost"),
+                    port=int(db_config.get("port", 5432)),
+                    database=db_config.get("name", db_config.get("database", "kamikaze")),
+                    username=db_config.get("username", "postgres"),
+                    password=db_config.get("password", ""),
                     ssl_mode="require",  # Use SSL for RDS connections
                     min_size=int(secret_value.get("min_size", 5)),
                     max_size=int(secret_value.get("max_size", 20)),

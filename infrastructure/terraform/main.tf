@@ -1,6 +1,4 @@
-# FluxTrader AWS Infrastructure with Terraform
-# This configuration creates the necessary AWS resources for FluxTrader
-
+# Kamikaze-be Infrastructure - Complete Terraform Configuration
 terraform {
   required_version = ">= 1.0"
   required_providers {
@@ -9,6 +7,10 @@ terraform {
       version = "~> 5.0"
     }
   }
+}
+
+provider "aws" {
+  region = var.aws_region
 }
 
 # Variables
@@ -400,4 +402,41 @@ output "load_balancer_dns" {
 output "security_group_id" {
   description = "Security Group ID"
   value       = aws_security_group.fluxtrader.id
+}
+
+# AWS Secrets Manager
+resource "aws_secretsmanager_secret" "app_secrets" {
+  name        = var.secrets_manager_name
+  description = "Application secrets for ${var.project_name}"
+
+  tags = merge(var.common_tags, {
+    Name        = var.secrets_manager_name
+    Environment = var.environment
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "app_secrets" {
+  secret_id = aws_secretsmanager_secret.app_secrets.id
+  secret_string = jsonencode({
+    database = {
+      host     = aws_db_instance.fluxtrader.endpoint
+      port     = aws_db_instance.fluxtrader.port
+      name     = aws_db_instance.fluxtrader.db_name
+      username = aws_db_instance.fluxtrader.username
+      password = var.db_master_password
+    }
+    application = {
+      environment = var.environment
+      port        = var.app_port
+      region      = var.aws_region
+    }
+    aws = {
+      region = var.aws_region
+    }
+  })
+}
+
+output "secrets_manager_arn" {
+  description = "AWS Secrets Manager ARN"
+  value       = aws_secretsmanager_secret.app_secrets.arn
 }

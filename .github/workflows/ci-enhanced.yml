@@ -903,9 +903,9 @@ jobs:
         name: performance-benchmark
         path: benchmark.json
 
-  # 🚀 Deploy Kamikaze-be to EC2 (Multi-Environment)
-  deploy-to-ec2:
-    name: 🚀 Deploy Kamikaze-be to EC2
+  # 🚀 Deploy Kamikaze-be with Infrastructure-as-Code
+  deploy-infrastructure:
+    name: 🚀 Deploy Infrastructure & Application
     runs-on: ubuntu-latest
     needs: [branch-detection, approval, setup, code-quality, aws-secrets-test, unit-tests, integration-tests, build-verification, security-scan, docker-build]
     if: always() && (needs.branch-detection.outputs.requires_approval == 'false' || needs.approval.result == 'success') && needs.setup.result == 'success'
@@ -922,7 +922,52 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
-    - name: 🔑 Setup SSH key for EC2
+    - name: 🏗️ Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "~1.0"
+
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 🚀 Deploy Infrastructure and Application
+      env:
+        ENVIRONMENT: ${{ needs.branch-detection.outputs.environment }}
+        GITHUB_ACTIONS: true
+        # Database credentials for Terraform and application
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        # SSH key for EC2 access
+        EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        # Extract public key from private key
+        EC2_PUBLIC_KEY: ""
+      run: |
+        echo "🚀 Starting Infrastructure-as-Code Deployment"
+        echo "🌟 Branch: ${{ needs.branch-detection.outputs.branch_name }}"
+        echo "🏗️ Environment: ${{ needs.branch-detection.outputs.environment }}"
+
+        # Extract public key from private key
+        echo "🔑 Setting up SSH keys..."
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+
+        # Generate public key from private key
+        ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
+        export EC2_PUBLIC_KEY=$(cat ~/.ssh/id_rsa.pub)
+
+        # Make deployment script executable
+        chmod +x scripts/deploy-with-terraform.sh
+
+        # Run infrastructure-as-code deployment
+        ./scripts/deploy-with-terraform.sh
       run: |
         mkdir -p ~/.ssh
         if [ -n "${{ secrets.EC2_SSH_PRIVATE_KEY }}" ]; then
@@ -1234,7 +1279,7 @@ jobs:
   ci-summary:
     name: 📋 CI Summary
     runs-on: ubuntu-latest
-    needs: [branch-detection, approval, setup, code-quality, aws-secrets-test, unit-tests, integration-tests, build-verification, security-scan, docker-build, deploy-to-ec2]
+    needs: [branch-detection, approval, setup, code-quality, aws-secrets-test, unit-tests, integration-tests, build-verification, security-scan, docker-build, deploy-infrastructure]
     if: always()
 
     steps:
@@ -1261,7 +1306,7 @@ jobs:
         echo "| Build Verification | ${{ needs.build-verification.result }} | Application startup and import verification |" >> $GITHUB_STEP_SUMMARY
         echo "| Security Scan | ${{ needs.security-scan.result }} | Vulnerability and secrets scanning |" >> $GITHUB_STEP_SUMMARY
         echo "| Docker Build | ${{ needs.docker-build.result }} | Container build and security scan |" >> $GITHUB_STEP_SUMMARY
-        echo "| EC2 Deployment | ${{ needs.deploy-to-ec2.result }} | Production deployment to EC2 instance |" >> $GITHUB_STEP_SUMMARY
+        echo "| Infrastructure Deployment | ${{ needs.deploy-infrastructure.result }} | Infrastructure and application deployment |" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🔐 Security Features" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ AWS Secrets Manager integration" >> $GITHUB_STEP_SUMMARY
