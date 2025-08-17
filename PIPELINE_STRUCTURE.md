@@ -2,77 +2,51 @@
 
 ## 📋 **Pipeline Overview**
 
-This document explains the CI/CD pipeline structure and which workflows run for different branches.
+This document explains the unified CI/CD pipeline structure that handles all branches and environments in a single workflow.
 
-## 🔄 **Active Workflows**
+## 🔄 **Single Unified Pipeline**
 
-### **1. 🧪 Dev Branch Deployment** 
-- **File**: `.github/workflows/cd-dev-branch.yml`
-- **Triggers**: 
-  - Push to `dev`, `develop`, `development` branches
-  - Pull requests to dev branches
-  - Manual workflow dispatch
-- **Purpose**: Development testing and validation
-- **Target**: Current EC2 instance (i-08bc5befe61de1a51) with RDS
-- **Environment**: `development`
-- **Features**:
-  - ✅ Build and test application
-  - ✅ Run database migration to RDS
-  - ✅ Deploy to EC2 with RDS configuration
-  - ✅ Health checks and smoke tests
-  - ✅ Database connection verification
-
-### **2. 🚀 Production Deployment**
+### **🚀 Kamikaze-be CI/CD Pipeline**
 - **File**: `.github/workflows/ci-enhanced.yml`
-- **Triggers**: 
-  - Push to `main`, `master` branches
-  - Pull requests to main branches
-  - Manual workflow dispatch
-- **Purpose**: Production deployment
-- **Target**: EC2 instance with RDS (production environment)
-- **Environment**: `production`
+- **Triggers**:
+  - Push to `main`, `master`, `dev`, `develop`, `cicd-be` branches
+  - Pull requests to these branches
+  - Manual workflow dispatch with branch selection
+- **Purpose**: Complete CI/CD for all environments
+- **Target**: EC2 instance (i-08bc5befe61de1a51) with RDS
 - **Features**:
+  - ✅ Branch detection and environment mapping
+  - ✅ Manual approval for production/staging branches
+  - ✅ Automatic deployment for dev branches
+  - ✅ Database migration (localhost → RDS)
+  - ✅ SSH-based EC2 deployment
+  - ✅ Health checks and verification
   - ✅ Comprehensive CI/CD pipeline
   - ✅ Security scanning
-  - ✅ Production deployment
-  - ✅ AWS integration
+  - ✅ Multi-environment support
 
-## 🚫 **Disabled Workflows**
+## 🎯 **Branch Strategy & Approval Flow**
 
-### **3. 🚀 Deploy to AWS Staging** (DISABLED)
-- **File**: `.github/workflows/cd-staging-aws.yml`
-- **Status**: **DISABLED** to avoid conflicts
-- **Reason**: This was an old staging setup that conflicted with the current dev branch workflow
-- **Replacement**: Use `cd-dev-branch.yml` for development testing
-
-## 🎯 **Branch Strategy**
-
-### **Development Workflow**
+### **Branch-to-Environment Mapping**
 ```
-dev branch → cd-dev-branch.yml → EC2 (development environment)
+dev/develop     → development environment (auto-deploy)
+cicd-be         → staging environment (manual approval)
+main/master     → production environment (manual approval)
 ```
 
-1. **Push to dev branch**
-2. **Triggers**: `🧪 Deploy to Dev Branch` workflow
-3. **Steps**:
-   - Build and test
-   - Database migration (localhost → RDS)
-   - Deploy to EC2
-   - Health checks
-   - Smoke tests
+### **Approval Requirements**
+- **Dev Branch**: ✅ **Auto-deploy** (no approval needed)
+- **CICD-be Branch**: 🔐 **Manual approval required**
+- **Main Branch**: 🔐 **Manual approval required**
 
-### **Production Workflow**
-```
-main branch → ci-enhanced.yml → EC2 (production environment)
-```
-
-1. **Merge dev → main**
-2. **Triggers**: `🚀 Enhanced CI Pipeline with AWS Integration`
-3. **Steps**:
-   - Full CI/CD pipeline
-   - Security scanning
-   - Production deployment
-   - Monitoring setup
+### **Workflow Steps**
+1. **Branch Detection**: Automatically detects branch and sets environment
+2. **Approval Gate**: Waits for manual approval (if required)
+3. **CI Pipeline**: Build, test, security scan
+4. **Database Migration**: Migrate data from localhost to RDS
+5. **EC2 Deployment**: Deploy via SSH to EC2 instance
+6. **Health Checks**: Verify application is running
+7. **Summary**: Generate deployment report
 
 ## 🔧 **Current Setup Details**
 
@@ -97,7 +71,7 @@ main branch → ci-enhanced.yml → EC2 (production environment)
 
 ## 🚀 **How to Deploy**
 
-### **For Development Testing**
+### **For Development Testing (Auto-Deploy)**
 ```bash
 # Work on dev branch
 git checkout dev
@@ -106,24 +80,42 @@ git commit -m "your changes"
 git push origin dev
 ```
 
-**Result**: Triggers `🧪 Deploy to Dev Branch` workflow
+**Result**: Automatically deploys to development environment (no approval needed)
 
-### **For Production Deployment**
+### **For Staging Deployment (Manual Approval)**
 ```bash
-# Merge dev to main after testing
+# Work on cicd-be branch
+git checkout cicd-be
+git add .
+git commit -m "your changes"
+git push origin cicd-be
+```
+
+**Result**: Triggers pipeline with manual approval gate for staging environment
+
+### **For Production Deployment (Manual Approval)**
+```bash
+# Merge to main after testing
 git checkout main
-git merge dev
+git merge dev  # or cicd-be
 git push origin main
 ```
 
-**Result**: Triggers `🚀 Enhanced CI Pipeline with AWS Integration` workflow
+**Result**: Triggers pipeline with manual approval gate for production environment
+
+### **Manual Workflow Dispatch**
+You can also trigger deployments manually from GitHub Actions:
+1. Go to Actions → Kamikaze-be CI/CD Pipeline
+2. Click "Run workflow"
+3. Select target branch and environment
+4. Choose whether to require approval
 
 ## 📊 **Monitoring Deployments**
 
 ### **GitHub Actions URLs**
 - **All Workflows**: https://github.com/Anki246/kamikaze-be/actions
-- **Dev Deployments**: Filter by "🧪 Deploy to Dev Branch"
-- **Production Deployments**: Filter by "🚀 Enhanced CI Pipeline"
+- **Unified Pipeline**: Filter by "🚀 Kamikaze-be CI/CD Pipeline"
+- **Manual Trigger**: https://github.com/Anki246/kamikaze-be/actions/workflows/ci-enhanced.yml
 
 ### **Application URLs**
 - **Development**: http://3.81.64.108:8000
@@ -132,35 +124,30 @@ git push origin main
 
 ## 🔍 **Troubleshooting**
 
-### **Multiple Workflows Running**
-If you see multiple workflows running for the same commit:
-1. Check which branch triggered them
-2. Only `cd-dev-branch.yml` should run for dev branch
-3. Only `ci-enhanced.yml` should run for main branch
-4. `cd-staging-aws.yml` is disabled and should not run
-
-### **Workflow Conflicts**
-- ✅ **Fixed**: Main CI pipeline no longer runs on dev branch
-- ✅ **Fixed**: Staging workflow disabled
-- ✅ **Result**: Clean separation between dev and production pipelines
+### **Single Pipeline Benefits**
+- ✅ **No Conflicts**: Only one workflow runs per commit
+- ✅ **Unified Logic**: All environments handled in one place
+- ✅ **Clear Approval Flow**: Manual approval for production/staging
+- ✅ **Auto-Deploy Dev**: Development changes deploy automatically
 
 ## 📋 **Summary**
 
-### **Current Active Pipelines**
-1. **Dev Branch** → `cd-dev-branch.yml` → Development testing
-2. **Main Branch** → `ci-enhanced.yml` → Production deployment
+### **Single Unified Pipeline**
+- **All Branches** → `ci-enhanced.yml` → Environment-specific deployment
 
 ### **Key Benefits**
-- ✅ Clear separation of dev and production
-- ✅ No workflow conflicts
-- ✅ RDS integration in both environments
-- ✅ Comprehensive testing and validation
-- ✅ Automated database migration
+- ✅ Single source of truth for all deployments
+- ✅ Consistent CI/CD logic across environments
+- ✅ Manual approval gates for production safety
+- ✅ Automatic dev deployments for fast iteration
+- ✅ RDS integration with database migration
+- ✅ SSH-based EC2 deployment
+- ✅ Comprehensive testing and security scanning
 
 ### **Recommended Workflow**
-1. Develop and test on `dev` branch
-2. Monitor dev deployment success
-3. Merge to `main` for production deployment
-4. Monitor production deployment
+1. **Develop**: Work on `dev` branch → auto-deploy to development
+2. **Stage**: Test on `cicd-be` branch → manual approval for staging
+3. **Production**: Merge to `main` → manual approval for production
+4. **Monitor**: Use GitHub Actions and application URLs to verify
 
-This structure ensures clean, predictable deployments with proper testing before production.
+This unified structure ensures consistent, secure deployments with appropriate approval gates.

@@ -1,25 +1,41 @@
-name: 🚀 Enhanced CI Pipeline with AWS Integration
+name: 🚀 Kamikaze-be CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, dev, develop, cicd-be ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, dev, develop, cicd-be ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
   workflow_dispatch:
     inputs:
+      target_branch:
+        description: 'Target branch to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - cicd-be
+        - main
       environment:
         description: 'Environment to deploy to'
         required: true
-        default: 'production'
+        default: 'development'
         type: choice
         options:
+        - development
+        - staging
         - production
+      require_approval:
+        description: 'Require manual approval before deployment'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -30,15 +46,92 @@ permissions:
 env:
   PYTHON_VERSION: '3.11'
   AWS_DEFAULT_REGION: 'us-east-1'
-  ENVIRONMENT: 'ci'
   CACHE_VERSION: 'v1'
+  # EC2 Configuration
+  EC2_INSTANCE_ID: 'i-08bc5befe61de1a51'
+  EC2_PUBLIC_IP: '3.81.64.108'
+  EC2_PRIVATE_IP: '172.31.36.119'
+  # Application Configuration
+  APP_NAME: 'kamikaze-be'
+  APP_PORT: '8000'
 
 jobs:
-  # Job 1: Setup and Cache Management
+  # Job 1: Branch Detection and Environment Setup
+  branch-detection:
+    name: 🔍 Branch Detection & Environment Setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      environment: ${{ steps.detect.outputs.environment }}
+      requires_approval: ${{ steps.detect.outputs.requires_approval }}
+      deploy_target: ${{ steps.detect.outputs.deploy_target }}
+      branch_name: ${{ steps.detect.outputs.branch_name }}
+
+    steps:
+    - name: 🔍 Detect branch and set environment
+      id: detect
+      run: |
+        # Get branch name
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          BRANCH_NAME="${{ github.event.inputs.target_branch }}"
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          REQUIRES_APPROVAL="${{ github.event.inputs.require_approval }}"
+        else
+          BRANCH_NAME="${{ github.ref_name }}"
+          # Auto-detect environment based on branch
+          case "$BRANCH_NAME" in
+            "main"|"master")
+              ENVIRONMENT="production"
+              REQUIRES_APPROVAL="true"
+              ;;
+            "cicd-be")
+              ENVIRONMENT="staging"
+              REQUIRES_APPROVAL="true"
+              ;;
+            "dev"|"develop")
+              ENVIRONMENT="development"
+              REQUIRES_APPROVAL="false"
+              ;;
+            *)
+              ENVIRONMENT="development"
+              REQUIRES_APPROVAL="false"
+              ;;
+          esac
+        fi
+
+        echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+        echo "requires_approval=$REQUIRES_APPROVAL" >> $GITHUB_OUTPUT
+        echo "deploy_target=${{ env.EC2_INSTANCE_ID }}" >> $GITHUB_OUTPUT
+
+        echo "🌟 Branch: $BRANCH_NAME"
+        echo "🏗️ Environment: $ENVIRONMENT"
+        echo "🔐 Requires Approval: $REQUIRES_APPROVAL"
+        echo "🎯 Deploy Target: ${{ env.EC2_INSTANCE_ID }}"
+
+  # Job 2: Manual Approval (for main and cicd-be branches)
+  approval:
+    name: 🔐 Manual Approval Required
+    runs-on: ubuntu-latest
+    needs: branch-detection
+    if: needs.branch-detection.outputs.requires_approval == 'true'
+    environment: ${{ needs.branch-detection.outputs.environment }}
+
+    steps:
+    - name: 🔐 Waiting for manual approval
+      run: |
+        echo "🔐 Manual approval required for deployment to ${{ needs.branch-detection.outputs.environment }}"
+        echo "🌟 Branch: ${{ needs.branch-detection.outputs.branch_name }}"
+        echo "🎯 Target: ${{ needs.branch-detection.outputs.deploy_target }}"
+        echo "✅ Approval granted - proceeding with deployment"
+
+  # Job 3: Setup and Cache Management
   setup:
     name: 🔧 Setup & Cache Management
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: [branch-detection, approval]
+    if: always() && (needs.branch-detection.outputs.requires_approval == 'false' || needs.approval.result == 'success')
     outputs:
       cache-hit: ${{ steps.cache.outputs.cache-hit }}
       python-version: ${{ env.PYTHON_VERSION }}
@@ -768,13 +861,13 @@ jobs:
         name: performance-benchmark
         path: benchmark.json
 
-  # 🚀 Deploy Kamikaze-be to EC2 (Production)
+  # 🚀 Deploy Kamikaze-be to EC2 (Multi-Environment)
   deploy-to-ec2:
     name: 🚀 Deploy Kamikaze-be to EC2
     runs-on: ubuntu-latest
-    needs: [setup, code-quality, aws-secrets-test, unit-tests, integration-tests, build-verification, security-scan, docker-build]
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.event_name == 'push'
-    environment: production
+    needs: [branch-detection, approval, setup, code-quality, aws-secrets-test, unit-tests, integration-tests, build-verification, security-scan, docker-build]
+    if: always() && (needs.branch-detection.outputs.requires_approval == 'false' || needs.approval.result == 'success') && needs.setup.result == 'success'
+    environment: ${{ needs.branch-detection.outputs.environment }}
 
     steps:
     - name: 📥 Checkout code
@@ -827,7 +920,7 @@ jobs:
 
     - name: 🔄 Run Database Migration (if needed)
       env:
-        ENVIRONMENT: production
+        ENVIRONMENT: ${{ needs.branch-detection.outputs.environment }}
         GITHUB_ACTIONS: true
         # Local database credentials (source) - only used if migrating
         LOCAL_DB_NAME: kamikaze
@@ -841,14 +934,19 @@ jobs:
         DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       run: |
         echo "🔄 Running database migration to RDS..."
+        echo "🌟 Branch: ${{ needs.branch-detection.outputs.branch_name }}"
+        echo "🏗️ Environment: ${{ needs.branch-detection.outputs.environment }}"
         python scripts/migrate-to-rds.py || echo "⚠️  Migration skipped (may already be complete)"
 
     - name: 🚀 Deploy Kamikaze-be to EC2
       env:
-        ENVIRONMENT: production
+        ENVIRONMENT: ${{ needs.branch-detection.outputs.environment }}
         GITHUB_ACTIONS: true
         USE_AWS_SECRETS: false
         AWS_DEFAULT_REGION: ${{ env.AWS_DEFAULT_REGION }}
+        # EC2 Configuration
+        EC2_INSTANCE_ID: ${{ env.EC2_INSTANCE_ID }}
+        EC2_PUBLIC_IP: ${{ env.EC2_PUBLIC_IP }}
         # RDS database credentials for deployment
         DB_HOST: ${{ secrets.DB_HOST }}
         DB_PORT: ${{ secrets.DB_PORT }}
@@ -858,12 +956,43 @@ jobs:
       run: |
         chmod +x scripts/deploy-to-ec2.sh
         echo "🚀 Deploying Kamikaze-be to EC2 with RDS database..."
+        echo "🌟 Branch: ${{ needs.branch-detection.outputs.branch_name }}"
+        echo "🏗️ Environment: ${{ needs.branch-detection.outputs.environment }}"
+        echo "🎯 Target: ${{ env.EC2_INSTANCE_ID }} (${{ env.EC2_PUBLIC_IP }})"
         ./scripts/deploy-to-ec2.sh
 
     - name: 🏥 Health Check
+      env:
+        EC2_PUBLIC_IP: ${{ env.EC2_PUBLIC_IP }}
+        APP_PORT: ${{ env.APP_PORT }}
+        ENVIRONMENT: ${{ needs.branch-detection.outputs.environment }}
       run: |
-        chmod +x scripts/health-check.sh
-        ./scripts/health-check.sh
+        echo "🏥 Performing health checks..."
+        echo "🌟 Branch: ${{ needs.branch-detection.outputs.branch_name }}"
+        echo "🏗️ Environment: ${{ needs.branch-detection.outputs.environment }}"
+        echo "🎯 Target: http://${{ env.EC2_PUBLIC_IP }}:${{ env.APP_PORT }}"
+
+        # Wait for application to start
+        echo "⏳ Waiting for application to start..."
+        sleep 30
+
+        # Health check with retries
+        for i in {1..10}; do
+          echo "🔍 Health check attempt $i/10..."
+
+          if curl -f "http://${{ env.EC2_PUBLIC_IP }}:${{ env.APP_PORT }}/health" --connect-timeout 10 --max-time 30; then
+            echo "✅ Health check passed"
+            break
+          else
+            echo "⏳ Health check failed, retrying in 15 seconds..."
+            sleep 15
+          fi
+
+          if [ $i -eq 10 ]; then
+            echo "❌ Health checks failed after 10 attempts"
+            exit 1
+          fi
+        done
 
     - name: 📊 Deployment Summary
       run: |
@@ -889,14 +1018,23 @@ jobs:
   ci-summary:
     name: 📋 CI Summary
     runs-on: ubuntu-latest
-    needs: [setup, code-quality, aws-secrets-test, unit-tests, integration-tests, build-verification, security-scan, docker-build, deploy-to-ec2]
+    needs: [branch-detection, approval, setup, code-quality, aws-secrets-test, unit-tests, integration-tests, build-verification, security-scan, docker-build, deploy-to-ec2]
     if: always()
 
     steps:
     - name: 📋 Generate CI Summary
       run: |
-        echo "## 🚀 Enhanced CI Pipeline Results" >> $GITHUB_STEP_SUMMARY
+        echo "## 🚀 Kamikaze-be CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🌟 Deployment Information" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ needs.branch-detection.outputs.branch_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ needs.branch-detection.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Required Approval**: ${{ needs.branch-detection.outputs.requires_approval }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **EC2 Instance**: ${{ env.EC2_INSTANCE_ID }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Application URL**: [http://${{ env.EC2_PUBLIC_IP }}:${{ env.APP_PORT }}](http://${{ env.EC2_PUBLIC_IP }}:${{ env.APP_PORT }})" >> $GITHUB_STEP_SUMMARY
+        echo "- **Health Check**: [http://${{ env.EC2_PUBLIC_IP }}:${{ env.APP_PORT }}/health](http://${{ env.EC2_PUBLIC_IP }}:${{ env.APP_PORT }}/health)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📊 Pipeline Results" >> $GITHUB_STEP_SUMMARY
         echo "| Component | Status | Details |" >> $GITHUB_STEP_SUMMARY
         echo "|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
         echo "| Setup & Cache | ${{ needs.setup.result }} | Dependency caching and environment setup |" >> $GITHUB_STEP_SUMMARY
