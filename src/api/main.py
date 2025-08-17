@@ -11,6 +11,8 @@ Features:
 - Configuration management
 """
 
+# Pipeline trigger
+
 import asyncio
 import json
 import logging
