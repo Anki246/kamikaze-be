@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 # Lazy-loaded database configuration
 _db_config = None
 
+
 def get_db_config():
     """Get database configuration (lazy-loaded)."""
     global _db_config

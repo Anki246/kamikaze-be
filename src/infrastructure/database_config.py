@@ -74,9 +74,9 @@ class DatabaseConfig:
         use_aws_secrets = os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
         has_rds_host = os.getenv("DB_HOST", "").endswith(".rds.amazonaws.com")
 
-        return (
-            AWS_SECRETS_AVAILABLE
-            and (use_aws_secrets or (environment == "production" and (github_actions or has_rds_host)))
+        return AWS_SECRETS_AVAILABLE and (
+            use_aws_secrets
+            or (environment == "production" and (github_actions or has_rds_host))
         )
 
     def _load_from_aws_secrets(self) -> bool:
