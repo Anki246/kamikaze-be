@@ -56,10 +56,8 @@ README.md
 .gitlab-ci.yml
 
 # Development files
-tests/
+# Note: tests/ directory is included for Docker validation
 *.test
-test_*
-*_test.py
 
 # Logs
 logs/

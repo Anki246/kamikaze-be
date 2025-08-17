@@ -77,6 +77,18 @@ class ApplicationSecrets:
     webhook_secret: Optional[str] = None
 
 
+@dataclass
+class AWSCredentials:
+    """AWS credentials from secrets manager."""
+
+    access_key_id: str
+    secret_access_key: str
+    region: str = "us-east-1"
+    session_token: Optional[str] = None
+    groq_api_key: Optional[str] = None
+    credentials_encryption_key: Optional[str] = None
+
+
 class SecretsManager:
     """AWS Secrets Manager integration for secure credential management."""
 
@@ -143,10 +155,10 @@ class SecretsManager:
             return None
 
         try:
-            # Use direct secret name for kamikaze-be (kmkz-secrets)
-            # Check if it's the main secret or environment-specific
-            if secret_name == "kmkz-secrets" or secret_name == "main":
-                full_secret_name = "kmkz-secrets"
+            # Use direct secret name for kamikaze-be secrets
+            # Check if it's a direct AWS secret name or environment-specific
+            if secret_name in ["kmkz-secrets", "kmkz-db-secrets", "kmkz-app-secrets", "main"]:
+                full_secret_name = secret_name
             else:
                 full_secret_name = f"kamikaze-be/{self.environment}/{secret_name}"
 
@@ -182,36 +194,38 @@ class SecretsManager:
         """
         Get database credentials from AWS Secrets Manager or environment variables.
 
+        Tries to retrieve credentials from kmkz-db-secrets first, then falls back
+        to legacy kmkz-secrets format, and finally environment variables.
+
         Args:
             database_name: Name of the database configuration
 
         Returns:
             DatabaseCredentials object
         """
-        # Try AWS Secrets Manager first using kmkz-secrets
+        # Try AWS Secrets Manager first using kmkz-db-secrets (RDS format)
         try:
-            secret_value = await self._get_secret_value("kmkz-secrets")
+            secret_value = await self._get_secret_value("kmkz-db-secrets")
 
             if secret_value:
                 logger.info(
-                    "✅ Using database credentials from AWS Secrets Manager (kmkz-secrets)"
+                    "✅ Using database credentials from AWS Secrets Manager (kmkz-db-secrets)"
                 )
-                # Extract database configuration from the nested structure
-                db_config = secret_value.get("database", {})
+                # RDS secret format: username, password, engine, host, port, dbInstanceIdentifier
                 return DatabaseCredentials(
-                    host=db_config.get("host", "localhost"),
-                    port=int(db_config.get("port", 5432)),
-                    database=db_config.get("name", db_config.get("database", "kamikaze")),
-                    username=db_config.get("username", "postgres"),
-                    password=db_config.get("password", ""),
+                    host=secret_value.get("host", "localhost"),
+                    port=int(secret_value.get("port", 5432)),
+                    database=secret_value.get("dbname", secret_value.get("dbInstanceIdentifier", "kamikaze")),
+                    username=secret_value.get("username", "postgres"),
+                    password=secret_value.get("password", ""),
                     ssl_mode="require",  # Use SSL for RDS connections
-                    min_size=int(secret_value.get("min_size", 5)),
-                    max_size=int(secret_value.get("max_size", 20)),
-                    timeout=int(secret_value.get("timeout", 60)),
+                    min_size=5,  # Default pool settings for RDS
+                    max_size=20,
+                    timeout=60,
                 )
         except Exception as e:
             logger.warning(
-                f"Failed to get database credentials from kmkz-database: {e}"
+                f"Failed to get database credentials from kmkz-db-secrets: {e}"
             )
 
         # Fallback: Try legacy kmkz-secrets format
@@ -219,16 +233,20 @@ class SecretsManager:
             secret_value = await self._get_secret_value("kmkz-secrets")
 
             if secret_value:
-                db_config = secret_value.get("database", {}).get(self.environment, {})
+                # Try direct database config first
+                db_config = secret_value.get("database", {})
+                if db_config and not isinstance(db_config, dict) or not db_config:
+                    # Try environment-specific config
+                    db_config = secret_value.get("database", {}).get(self.environment, {})
 
                 if db_config:
                     logger.info(
-                        f"✅ Using database credentials from AWS Secrets Manager (kmkz-secrets/{self.environment})"
+                        f"✅ Using database credentials from AWS Secrets Manager (kmkz-secrets)"
                     )
                     return DatabaseCredentials(
                         host=db_config.get("host", "localhost"),
                         port=int(db_config.get("port", 5432)),
-                        database=db_config.get("database", "kamikaze"),
+                        database=db_config.get("name", db_config.get("database", "kamikaze")),
                         username=db_config.get("username", "postgres"),
                         password=db_config.get("password", ""),
                         ssl_mode=db_config.get("ssl_mode", "prefer"),
@@ -283,13 +301,35 @@ class SecretsManager:
         except Exception as e:
             logger.warning(f"Failed to get trading API keys from kmkz-secrets: {e}")
 
-        # Fallback to environment variables
+        # Try to get Groq API key from AWS credentials as fallback
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if not groq_api_key:
+            try:
+                aws_creds = await self.get_aws_credentials()
+                groq_api_key = aws_creds.groq_api_key
+                if groq_api_key:
+                    logger.info("✅ Using Groq API key from AWS credentials (kmkz-app-secrets)")
+            except Exception as e:
+                logger.debug(f"Could not retrieve Groq API key from AWS: {e}")
+
+        # Fallback to environment variables (Binance credentials now retrieved from database)
         logger.info("📝 Using trading API keys from environment variables")
+        logger.info("ℹ️ Binance API credentials should be stored in database, not environment variables")
+
+        # Check if Binance credentials are in environment (for backward compatibility)
+        binance_api_key = os.getenv("BINANCE_API_KEY")
+        binance_secret_key = os.getenv("BINANCE_SECRET_KEY")
+
+        if binance_api_key and binance_secret_key:
+            logger.warning("⚠️ Binance credentials found in environment variables. Consider moving to database for better security.")
+        else:
+            logger.info("ℹ️ No Binance credentials in environment variables. Will retrieve from database when needed.")
+
         return TradingAPIKeys(
-            binance_api_key=os.getenv("BINANCE_API_KEY"),
-            binance_secret_key=os.getenv("BINANCE_SECRET_KEY"),
+            binance_api_key=binance_api_key,
+            binance_secret_key=binance_secret_key,
             binance_testnet=os.getenv("BINANCE_TESTNET", "true").lower() == "true",
-            groq_api_key=os.getenv("GROQ_API_KEY"),
+            groq_api_key=groq_api_key,
             openai_api_key=os.getenv("OPENAI_API_KEY"),
         )
 
@@ -328,13 +368,64 @@ class SecretsManager:
         except Exception as e:
             logger.warning(f"Failed to get application secrets from kmkz-secrets: {e}")
 
+        # Try to get credentials encryption key from AWS credentials as fallback
+        credentials_encryption_key = os.getenv("CREDENTIALS_ENCRYPTION_KEY")
+        if not credentials_encryption_key:
+            try:
+                aws_creds = await self.get_aws_credentials()
+                credentials_encryption_key = aws_creds.credentials_encryption_key
+                if credentials_encryption_key:
+                    logger.info("✅ Using credentials encryption key from AWS credentials (kmkz-app-secrets)")
+            except Exception as e:
+                logger.debug(f"Could not retrieve credentials encryption key from AWS: {e}")
+
         # Fallback to environment variables
         logger.info("📝 Using application secrets from environment variables")
         return ApplicationSecrets(
             jwt_secret=os.getenv("JWT_SECRET", "your-secret-key-change-in-production"),
             encryption_key=os.getenv("ENCRYPTION_KEY", "default-encryption-key"),
-            credentials_encryption_key=os.getenv("CREDENTIALS_ENCRYPTION_KEY", ""),
+            credentials_encryption_key=credentials_encryption_key or "",
             webhook_secret=os.getenv("WEBHOOK_SECRET"),
+        )
+
+    async def get_aws_credentials(self) -> AWSCredentials:
+        """
+        Get AWS credentials from AWS Secrets Manager or environment variables.
+
+        Tries to retrieve credentials from kmkz-app-secrets first, then falls back
+        to environment variables.
+
+        Returns:
+            AWSCredentials object
+        """
+        # Try AWS Secrets Manager first using kmkz-app-secrets
+        try:
+            secret_value = await self._get_secret_value("kmkz-app-secrets")
+
+            if secret_value:
+                logger.info(
+                    "✅ Using AWS credentials from AWS Secrets Manager (kmkz-app-secrets)"
+                )
+                return AWSCredentials(
+                    access_key_id=secret_value.get("AWS_ACCESS_KEY_ID", ""),
+                    secret_access_key=secret_value.get("AWS_SECRET_ACCESS_KEY", ""),
+                    region=secret_value.get("AWS_REGION", "us-east-1"),
+                    session_token=secret_value.get("AWS_SESSION_TOKEN"),
+                    groq_api_key=secret_value.get("GROQ_API_KEY"),
+                    credentials_encryption_key=secret_value.get("CREDENTIALS_ENCRYPTION_KEY"),
+                )
+        except Exception as e:
+            logger.warning(f"Failed to get AWS credentials from kmkz-app-secrets: {e}")
+
+        # Fallback to environment variables
+        logger.info("📝 Using AWS credentials from environment variables")
+        return AWSCredentials(
+            access_key_id=os.getenv("AWS_ACCESS_KEY_ID", ""),
+            secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+            region=os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1")),
+            session_token=os.getenv("AWS_SESSION_TOKEN"),
+            groq_api_key=os.getenv("GROQ_API_KEY"),
+            credentials_encryption_key=os.getenv("CREDENTIALS_ENCRYPTION_KEY"),
         )
 
     async def update_secret(
@@ -436,23 +527,147 @@ async def get_application_secrets() -> ApplicationSecrets:
     return await secrets_manager.get_application_secrets()
 
 
+async def get_aws_credentials() -> AWSCredentials:
+    """Get AWS credentials."""
+    return await secrets_manager.get_aws_credentials()
+
+
+# Simple test cases for AWS integration
+async def test_aws_secrets():
+    """Simple test for AWS Secrets Manager integration."""
+    print("🧪 Testing AWS Secrets Manager Integration")
+    print("=" * 50)
+
+    try:
+        # Test database credentials
+        print("📊 Testing database credentials...")
+        db_creds = await get_database_credentials()
+        print(f"   ✅ Database: {db_creds.host}:{db_creds.port}/{db_creds.database}")
+
+        # Test AWS credentials (includes GROQ_API_KEY)
+        print("🔑 Testing AWS credentials...")
+        aws_creds = await get_aws_credentials()
+        print(f"   ✅ AWS Access Key: {'***' if aws_creds.access_key_id else 'Not set'}")
+        print(f"   ✅ AWS Region: {aws_creds.region}")
+        print(f"   ✅ Groq API Key: {'***' if aws_creds.groq_api_key else 'Not set'}")
+        print(f"   ✅ Credentials Encryption Key: {'***' if aws_creds.credentials_encryption_key else 'Not set'}")
+
+        # Test standalone functions
+        print("🔧 Testing standalone functions...")
+        try:
+            db_secret = get_kmkz_db_secret()
+            print(f"   ✅ DB Secret: {'Retrieved' if db_secret else 'Not found'}")
+        except Exception as e:
+            print(f"   ⚠️ DB Secret: {e}")
+
+        try:
+            app_secret = get_kmkz_app_secret()
+            print(f"   ✅ App Secret: {'Retrieved' if app_secret else 'Not found'}")
+        except Exception as e:
+            print(f"   ⚠️ App Secret: {e}")
+
+        print("✅ All tests completed!")
+        return True
+
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+        return False
+
+
 # Example usage and testing
 async def main():
     """Example usage of the SecretsManager."""
-    print("🔐 Testing AWS Secrets Manager integration...")
+    await test_aws_secrets()
 
-    # Test database credentials
-    db_creds = await get_database_credentials()
-    print(f"📊 Database: {db_creds.host}:{db_creds.port}/{db_creds.database}")
 
-    # Test trading API keys
-    api_keys = await get_trading_api_keys()
-    print(f"🔑 Binance API Key: {'***' if api_keys.binance_api_key else 'Not set'}")
-    print(f"🔑 Groq API Key: {'***' if api_keys.groq_api_key else 'Not set'}")
+def get_kmkz_db_secret():
+    """
+    Standalone function to retrieve database credentials from kmkz-db-secrets.
+    This follows the AWS-generated RDS secret format.
 
-    # Test application secrets
-    app_secrets = await get_application_secrets()
-    print(f"🔐 JWT Secret: {'***' if app_secrets.jwt_secret else 'Not set'}")
+    Returns:
+        dict: Database credentials with keys: username, password, engine, host, port, dbInstanceIdentifier
+    """
+    if not AWS_AVAILABLE:
+        logger.error("❌ boto3 not available, cannot retrieve AWS secrets")
+        return None
+
+    secret_name = "kmkz-db-secrets"
+    region_name = "us-east-1"
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+
+        # Parse the secret string
+        secret = json.loads(get_secret_value_response['SecretString'])
+
+        logger.info(f"✅ Successfully retrieved {secret_name}")
+        return secret
+
+    except ClientError as e:
+        logger.error(f"❌ Error retrieving secret {secret_name}: {e}")
+        # For a list of exceptions thrown, see
+        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+        raise e
+    except Exception as e:
+        logger.error(f"❌ Unexpected error retrieving secret {secret_name}: {e}")
+        raise e
+
+
+def get_kmkz_app_secret():
+    """
+    Standalone function to retrieve AWS credentials from kmkz-app-secrets.
+    This contains AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, GROQ_API_KEY, and CREDENTIALS_ENCRYPTION_KEY.
+
+    Returns:
+        dict: AWS credentials with keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, GROQ_API_KEY, CREDENTIALS_ENCRYPTION_KEY
+    """
+    if not AWS_AVAILABLE:
+        logger.error("❌ boto3 not available, cannot retrieve AWS secrets")
+        return None
+
+    secret_name = "kmkz-app-secrets"
+    region_name = "us-east-1"
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+
+        # Parse the secret string
+        secret = json.loads(get_secret_value_response['SecretString'])
+
+        logger.info(f"✅ Successfully retrieved {secret_name}")
+        return secret
+
+    except ClientError as e:
+        logger.error(f"❌ Error retrieving secret {secret_name}: {e}")
+        # For a list of exceptions thrown, see
+        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+        raise e
+    except Exception as e:
+        logger.error(f"❌ Unexpected error retrieving secret {secret_name}: {e}")
+        raise e
+
+
+# Alias for backward compatibility
+SecretsManager = AWSSecretsManager
 
 
 if __name__ == "__main__":

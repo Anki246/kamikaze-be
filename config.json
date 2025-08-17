@@ -1,7 +1,7 @@
 {
   "trading": {
-    "leverage": 20,
-    "trade_amount_usdt": 4,
+    "leverage": 10,
+    "trade_amount_usdt": 50.0,
     "max_position_size_pct": 2.0,
     "pump_threshold": 0.03,
     "dump_threshold": -0.03,
@@ -78,5 +78,10 @@
     "command_timeout": 60,
     "ssl": false,
     "pool_recycle": 3600
+  },
+  "system": {
+    "environment": "development",
+    "debug": false,
+    "enable_metrics": true
   }
 }

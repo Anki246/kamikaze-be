@@ -140,9 +140,13 @@ class SystemHealthMonitor:
 
         # Check API keys
         if not config.api.binance_api_key:
-            issues.append("Missing Binance API key")
+            print("ℹ️ Binance API key not in environment (database retrieval available)")
+        else:
+            print("⚠️ Binance API key found in environment (consider database storage)")
         if not config.api.binance_secret_key:
-            issues.append("Missing Binance secret key")
+            print("ℹ️ Binance secret key not in environment (database retrieval available)")
+        else:
+            print("⚠️ Binance secret key found in environment (consider database storage)")
         if not config.api.groq_api_key:
             issues.append("Missing Groq API key (AI features disabled)")
 

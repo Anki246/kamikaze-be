@@ -89,6 +89,13 @@ class BinanceToolsInterface:
         # Initialize enhanced logging
         self.logger.info("🔧 Initializing Enhanced Binance Tools Interface with FastMCP")
 
+        # Log credential status
+        if not self.api_key or not self.secret_key:
+            self.logger.warning("⚠️ Binance credentials not provided - will retrieve from database when needed")
+            self.logger.info("ℹ️ Trading functionality will be limited until credentials are available")
+        else:
+            self.logger.info("✅ Binance credentials provided via parameters or environment")
+
     def _generate_signature(self, query_string: str) -> str:
         """Generate HMAC SHA256 signature for Binance API."""
         return generate_binance_signature(query_string, self.secret_key)
@@ -2874,7 +2881,7 @@ class FluxTraderAgent(BaseAgent):
             min_balance_required=10.0,
             risk_level="high",
             time_frame="1m",
-            requires_api_keys=["binance", "groq"],
+            requires_api_keys=["groq"],  # Binance credentials retrieved from database
             features=[
                 "ai_analysis",
                 "multi_level_stops",
@@ -2907,14 +2914,17 @@ class FluxTraderAgent(BaseAgent):
                     self._set_status(AgentStatus.ERROR)
                     return False
 
+                # Try to get account balance (will fail gracefully if no credentials)
                 balance_result = await market_data_api.get_account_balance(
                     user_id=user_id
                 )
 
                 if not balance_result.get("success", False):
-                    self.logger.error("Failed to connect to Binance API")
-                    self._set_status(AgentStatus.ERROR)
-                    return False
+                    self.logger.warning("Could not connect to Binance API - credentials may not be configured")
+                    self.logger.info("Agent will run in limited mode without trading functionality")
+                    # Don't set error status - allow agent to run without trading
+                else:
+                    self.logger.info("✅ Binance API connection successful")
 
                 self.logger.info("FluxTrader agent initialized successfully")
                 self._set_status(AgentStatus.STOPPED)

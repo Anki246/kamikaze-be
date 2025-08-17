@@ -124,9 +124,16 @@ class APIConfig:
     alpha_vantage_key: Optional[str] = None
 
     def __post_init__(self):
-        """Load API keys from environment variables."""
+        """Load API keys from environment variables (Binance credentials now retrieved from database)."""
+        # Binance credentials are now primarily retrieved from database
+        # Environment variables are kept for backward compatibility only
         self.binance_api_key = os.getenv("BINANCE_API_KEY")
         self.binance_secret_key = os.getenv("BINANCE_SECRET_KEY")
+
+        # Log warning if Binance credentials are found in environment
+        if self.binance_api_key or self.binance_secret_key:
+            print("⚠️ Binance credentials found in environment variables. Consider using database storage for better security.")
+
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         self.alpha_vantage_key = os.getenv("ALPHA_VANTAGE_API_KEY")
 
@@ -314,8 +321,8 @@ class ConfigManager:
     def validate_config(self) -> Dict[str, bool]:
         """Validate configuration and return status."""
         validation_results = {
-            "binance_api_key": bool(self.api.binance_api_key),
-            "binance_secret_key": bool(self.api.binance_secret_key),
+            "binance_api_key": bool(self.api.binance_api_key),  # Optional - can be retrieved from database
+            "binance_secret_key": bool(self.api.binance_secret_key),  # Optional - can be retrieved from database
             "groq_api_key": bool(self.api.groq_api_key),
             "trading_params": all(
                 [
@@ -332,6 +339,11 @@ class ConfigManager:
                 ]
             ),
         }
+
+        # Log information about Binance credentials
+        if not validation_results["binance_api_key"] or not validation_results["binance_secret_key"]:
+            print("ℹ️ Binance credentials not found in environment variables. Will retrieve from database when needed.")
+
         return validation_results
 
     def get_trading_params(self) -> Dict[str, Any]:

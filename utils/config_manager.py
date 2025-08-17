@@ -35,16 +35,18 @@ class FluxTraderConfigManager:
         # Validate API configuration
         print("\n🔑 API Configuration:")
         if not config.api.binance_api_key:
-            issues.append("Missing Binance API key")
-            print("❌ Binance API Key: Not configured")
+            warnings.append("Binance API key not in environment variables (will retrieve from database)")
+            print("ℹ️ Binance API Key: Not in environment (database retrieval available)")
         else:
-            print("✅ Binance API Key: Configured")
+            warnings.append("Binance API key found in environment variables (consider using database)")
+            print("⚠️ Binance API Key: Configured in environment (consider database storage)")
 
         if not config.api.binance_secret_key:
-            issues.append("Missing Binance secret key")
-            print("❌ Binance Secret Key: Not configured")
+            warnings.append("Binance secret key not in environment variables (will retrieve from database)")
+            print("ℹ️ Binance Secret Key: Not in environment (database retrieval available)")
         else:
-            print("✅ Binance Secret Key: Configured")
+            warnings.append("Binance secret key found in environment variables (consider using database)")
+            print("⚠️ Binance Secret Key: Configured in environment (consider database storage)")
 
         if not config.api.groq_api_key:
             warnings.append("Missing Groq API key - AI features will be disabled")
