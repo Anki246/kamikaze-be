@@ -1,11 +1,17 @@
 name: 🚀 Deploy to AWS Staging
 
+# DISABLED: This workflow is disabled to avoid conflicts with cd-dev-branch.yml
+# Use cd-dev-branch.yml for dev branch deployments instead
 on:
-  push:
-    branches: [ main, master, dev ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      force_enable:
+        description: 'Force enable this workflow (use cd-dev-branch.yml instead)'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+        - 'false'
     inputs:
       force_deploy:
         description: 'Force deployment even if CI is not green'
