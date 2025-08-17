@@ -29,8 +29,9 @@ To deploy FluxTrader to your EC2 instance with RDS database connectivity, you ne
 ## 🖥️ **EC2 Configuration Secrets**
 
 ### **EC2_SSH_PRIVATE_KEY**
-- **Description**: Private SSH key for accessing EC2 instance
-- **Value**: Your EC2 private key (entire content including headers)
+- **Description**: Private SSH key for accessing EC2 instance (kmkz-key-ec2.pem)
+- **Value**: Content of your `kmkz-key-ec2.pem` file from Downloads folder
+- **Location**: `~/Downloads/kmkz-key-ec2.pem` or `~/.ssh/kmkz-key-ec2.pem`
 - **Format**:
 ```
 -----BEGIN RSA PRIVATE KEY-----
@@ -38,6 +39,7 @@ MIIEpAIBAAKCAQEA...
 ...your private key content...
 -----END RSA PRIVATE KEY-----
 ```
+- **Note**: Your EC2 instance was launched without a key pair, so you need to add SSH access manually first
 
 ---
 

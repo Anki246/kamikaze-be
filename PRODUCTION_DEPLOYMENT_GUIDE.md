@@ -3,11 +3,14 @@
 ## 🚀 Production Environment Configuration
 
 ### **Target Infrastructure**
-- **EC2 Instance**: i-07e35a954b57372a3
-- **Public IP**: 34.238.167.174
+- **EC2 Instance**: i-08bc5befe61de1a51
 - **Instance Name**: kmkz-ec2
-- **Database**: RDS PostgreSQL (credentials in AWS Secrets Manager)
-- **Secret Name**: kmkz-secrets
+- **Public IP**: 3.81.64.108
+- **Private IP**: 172.31.36.119
+- **Key Pair**: kmkz-new-ec2key.pem
+- **Database**: kmkz-database-new (AWS RDS PostgreSQL)
+- **Database Migration**: Automated from localhost to RDS
+- **Credentials**: Stored in GitHub secrets (Production environment)
 
 ---
 

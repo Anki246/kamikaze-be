@@ -66,11 +66,17 @@ class DatabaseConfig:
 
     def _should_use_aws_secrets(self) -> bool:
         """Determine if AWS Secrets Manager should be used."""
-        # Only use AWS Secrets Manager if explicitly enabled and available
-        # In CI/production, we may use environment variables instead
+        # Use AWS Secrets Manager if:
+        # 1. Available and explicitly enabled, OR
+        # 2. Running in production environment (GitHub Actions) with RDS
+        environment = os.getenv("ENVIRONMENT", "development")
+        github_actions = os.getenv("GITHUB_ACTIONS", "false").lower() == "true"
+        use_aws_secrets = os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
+        has_rds_host = os.getenv("DB_HOST", "").endswith(".rds.amazonaws.com")
+
         return (
             AWS_SECRETS_AVAILABLE
-            and os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
+            and (use_aws_secrets or (environment == "production" and (github_actions or has_rds_host)))
         )
 
     def _load_from_aws_secrets(self) -> bool:
@@ -110,6 +116,13 @@ class DatabaseConfig:
         self.password = os.getenv(
             "DB_PASSWORD", os.getenv("POSTGRES_PASSWORD", self.password)
         )
+
+        # Configure SSL for RDS connections
+        if self.host and ".rds.amazonaws.com" in self.host:
+            self.ssl_mode = "require"
+            logger.info(f"🔐 Detected RDS host, enabling SSL: {self.host}")
+        elif self.host != "localhost":
+            self.ssl_mode = "prefer"
         self.min_pool_size = int(
             os.getenv(
                 "DB_MIN_SIZE",
@@ -132,11 +145,17 @@ class DatabaseConfig:
             "DB_SSL_MODE", os.getenv("POSTGRES_SSL_MODE", self.ssl_mode)
         )
 
-        # Validate that password is provided
-        if not self.password:
+        # Validate that password is provided (allow empty for development)
+        environment = os.getenv("ENVIRONMENT", "development")
+        if not self.password and environment == "production":
             raise ValueError(
-                "Database password must be provided via DB_PASSWORD environment variable"
+                "Database password must be provided via DB_PASSWORD environment variable in production"
             )
+        elif not self.password:
+            logger.warning(
+                "⚠️  No database password provided - using empty password for development"
+            )
+            self.password = ""
 
     @property
     def connection_string(self) -> str:
@@ -158,8 +177,8 @@ class DatabaseConfig:
         }
 
 
-# Global database configuration instance
-db_config = DatabaseConfig()
+# Note: Database configuration is now lazy-loaded to avoid early initialization
+# Use DatabaseConfig() directly in your code instead of the global instance
 
 # Database schema definitions for FluxTrader
 SCHEMA_DEFINITIONS = {

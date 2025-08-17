@@ -10,9 +10,19 @@ from typing import Any, Dict, List, Optional
 
 import asyncpg
 
-from .database_config import db_config
+from .database_config import DatabaseConfig
 
 logger = logging.getLogger(__name__)
+
+# Lazy-loaded database configuration
+_db_config = None
+
+def get_db_config():
+    """Get database configuration (lazy-loaded)."""
+    global _db_config
+    if _db_config is None:
+        _db_config = DatabaseConfig()
+    return _db_config
 
 
 class AuthDatabase:
@@ -38,12 +48,13 @@ class AuthDatabase:
                     await self.pool.close()
 
                 # Create connection pool with optimized settings for auth
+                config = get_db_config()
                 self.pool = await asyncpg.create_pool(
-                    host=db_config.host,
-                    port=db_config.port,
-                    database=db_config.database,
-                    user=db_config.user,
-                    password=db_config.password,
+                    host=config.host,
+                    port=config.port,
+                    database=config.database,
+                    user=config.user,
+                    password=config.password,
                     # Optimized for auth operations
                     min_size=2,  # Keep minimum connections for auth
                     max_size=10,  # Reasonable max for auth load
@@ -59,7 +70,7 @@ class AuthDatabase:
                     await conn.fetchval("SELECT 1")
 
                 self.connected = True
-                logger.info(f"✅ Auth database connected: {db_config.database}")
+                logger.info(f"✅ Auth database connected: {config.database}")
                 return True
 
             except Exception as e:

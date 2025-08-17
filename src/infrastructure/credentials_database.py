@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import asyncpg
 from cryptography.fernet import Fernet
 
-from .database_config import db_config
+from .database_config import DatabaseConfig
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +69,13 @@ class CredentialsDatabase:
                 if self.pool:
                     await self.pool.close()
 
+                config = DatabaseConfig()
                 self.pool = await asyncpg.create_pool(
-                    host=db_config.host,
-                    port=db_config.port,
-                    database=db_config.database,
-                    user=db_config.user,
-                    password=db_config.password,
+                    host=config.host,
+                    port=config.port,
+                    database=config.database,
+                    user=config.user,
+                    password=config.password,
                     min_size=2,
                     max_size=10,
                     command_timeout=10,
@@ -88,7 +89,7 @@ class CredentialsDatabase:
                     await conn.fetchval("SELECT 1")
 
                 self.connected = True
-                logger.info(f"✅ Credentials database connected: {db_config.database}")
+                logger.info(f"✅ Credentials database connected: {config.database}")
                 return True
 
             except Exception as e:

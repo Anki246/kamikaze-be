@@ -10,7 +10,7 @@ from typing import Optional
 
 import asyncpg
 
-from .database_config import INDEX_DEFINITIONS, SCHEMA_DEFINITIONS, db_config
+from .database_config import INDEX_DEFINITIONS, SCHEMA_DEFINITIONS, DatabaseConfig
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -26,13 +26,14 @@ class DatabaseInitializer:
     async def connect(self) -> bool:
         """Connect to PostgreSQL database."""
         try:
-            self.pool = await asyncpg.create_pool(**db_config.connection_params)
+            config = DatabaseConfig()
+            self.pool = await asyncpg.create_pool(**config.connection_params)
 
             # Test connection
             async with self.pool.acquire() as conn:
                 await conn.fetchval("SELECT 1")
 
-            logger.info(f"✅ Connected to database: {db_config.database}")
+            logger.info(f"✅ Connected to database: {config.database}")
             return True
 
         except Exception as e:
@@ -146,12 +147,13 @@ class DatabaseInitializer:
                 )
 
                 # Check connection count
+                config = DatabaseConfig()
                 connection_count = await conn.fetchval(
                     """
-                    SELECT count(*) FROM pg_stat_activity 
+                    SELECT count(*) FROM pg_stat_activity
                     WHERE datname = $1
                 """,
-                    db_config.database,
+                    config.database,
                 )
 
                 return {
@@ -159,7 +161,7 @@ class DatabaseInitializer:
                     "version": version,
                     "tables": table_count,
                     "connections": connection_count,
-                    "database": db_config.database,
+                    "database": config.database,
                 }
 
         except Exception as e:
