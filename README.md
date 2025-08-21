@@ -1,5 +1,7 @@
 # Kamikaze AI - AI-Powered Cryptocurrency Trading Backend
 
+🚀 **Pipeline Status**: Deploying with enhanced SSH setup and secret verification
+
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastMCP](https://img.shields.io/badge/FastMCP-2.0-green.svg)](https://gofastmcp.com)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
