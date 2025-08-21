@@ -144,6 +144,41 @@ jobs:
       with:
         name: docker-image
         
+    - name: Verify required secrets
+      run: |
+        echo "🔍 Verifying required secrets..."
+
+        # Check AWS secrets
+        if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+          echo "❌ AWS_ACCESS_KEY_ID secret is missing"
+          exit 1
+        fi
+
+        if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+          echo "❌ AWS_SECRET_ACCESS_KEY secret is missing"
+          exit 1
+        fi
+
+        # Check EC2 secrets
+        if [ -z "${{ secrets.EC2_HOST }}" ]; then
+          echo "❌ EC2_HOST secret is missing"
+          exit 1
+        fi
+
+        if [ -z "${{ secrets.EC2_USER }}" ]; then
+          echo "❌ EC2_USER secret is missing"
+          exit 1
+        fi
+
+        if [ -z "${{ secrets.EC2_SSH_PRIVATE_KEY }}" ]; then
+          echo "❌ EC2_SSH_PRIVATE_KEY secret is missing"
+          exit 1
+        fi
+
+        echo "✅ All required secrets are configured"
+        echo "🌐 EC2 Host: ${{ secrets.EC2_HOST }}"
+        echo "👤 EC2 User: ${{ secrets.EC2_USER }}"
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -156,7 +191,22 @@ jobs:
         mkdir -p ~/.ssh
         echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+        # Check if EC2_HOST is set
+        if [ -z "${{ secrets.EC2_HOST }}" ]; then
+          echo "❌ EC2_HOST secret is not set"
+          exit 1
+        fi
+
+        echo "🔍 Connecting to EC2 host: ${{ secrets.EC2_HOST }}"
+
+        # Add host key with error handling
+        ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts || {
+          echo "⚠️ ssh-keyscan failed, using StrictHostKeyChecking=no"
+          echo "Host ${{ secrets.EC2_HOST }}" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
+        }
         
     - name: Create deployment directory
       run: |
