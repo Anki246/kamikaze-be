@@ -1,0 +1,146 @@
+name: Test Build and Deployment
+
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches: [ dev ]
+  workflow_dispatch:
+
+env:
+  APPLICATION_NAME: kamikaze-ai
+  DOCKER_IMAGE_NAME: kamikaze-ai-backend
+
+jobs:
+  test-build:
+    name: Test Build Process
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run syntax checks
+      run: |
+        echo "🔍 Running syntax checks..."
+        python -m py_compile app.py
+        python -m py_compile src/api/main.py
+        python -m py_compile src/infrastructure/aws_secrets_manager.py
+        python -m py_compile src/infrastructure/auth_database.py
+        echo "✅ Syntax checks passed"
+        
+    - name: Validate configuration files
+      run: |
+        echo "🔍 Validating configuration files..."
+        python -c "import json; json.load(open('config.json'))"
+        echo "✅ Configuration files validated"
+        
+    - name: Test Docker build
+      run: |
+        echo "🐳 Testing Docker build..."
+        docker build -t ${{ env.DOCKER_IMAGE_NAME }}:test .
+        echo "✅ Docker build successful"
+        
+    - name: Test Docker run (basic)
+      run: |
+        echo "🚀 Testing Docker container..."
+        docker run --rm -d --name test-container -p 8001:8000 \
+          -e ENVIRONMENT=test \
+          -e USE_AWS_SECRETS=false \
+          -e LOG_LEVEL=INFO \
+          ${{ env.DOCKER_IMAGE_NAME }}:test
+        
+        # Wait for container to start
+        sleep 15
+        
+        # Check if container is running
+        if docker ps | grep -q test-container; then
+          echo "✅ Docker container started successfully"
+          
+          # Show container logs
+          echo "📋 Container logs:"
+          docker logs test-container --tail 10
+          
+          # Stop container
+          docker stop test-container
+        else
+          echo "❌ Docker container failed to start"
+          docker logs test-container
+          exit 1
+        fi
+        
+    - name: Clean up
+      if: always()
+      run: |
+        echo "🧹 Cleaning up..."
+        docker stop test-container 2>/dev/null || true
+        docker rm test-container 2>/dev/null || true
+        docker rmi ${{ env.DOCKER_IMAGE_NAME }}:test 2>/dev/null || true
+        echo "✅ Cleanup complete"
+
+  check-secrets:
+    name: Check Required Secrets
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Check AWS secrets
+      run: |
+        echo "🔍 Checking AWS secrets..."
+        if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+          echo "❌ AWS_ACCESS_KEY_ID secret is missing"
+          exit 1
+        else
+          echo "✅ AWS_ACCESS_KEY_ID is set"
+        fi
+        
+        if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+          echo "❌ AWS_SECRET_ACCESS_KEY secret is missing"
+          exit 1
+        else
+          echo "✅ AWS_SECRET_ACCESS_KEY is set"
+        fi
+        
+    - name: Check EC2 secrets
+      run: |
+        echo "🔍 Checking EC2 secrets..."
+        if [ -z "${{ secrets.EC2_HOST }}" ]; then
+          echo "❌ EC2_HOST secret is missing"
+          exit 1
+        else
+          echo "✅ EC2_HOST is set"
+        fi
+        
+        if [ -z "${{ secrets.EC2_USER }}" ]; then
+          echo "❌ EC2_USER secret is missing"
+          exit 1
+        else
+          echo "✅ EC2_USER is set"
+        fi
+        
+        if [ -z "${{ secrets.EC2_SSH_PRIVATE_KEY }}" ]; then
+          echo "❌ EC2_SSH_PRIVATE_KEY secret is missing"
+          exit 1
+        else
+          echo "✅ EC2_SSH_PRIVATE_KEY is set"
+        fi
+        
+        echo "✅ All required secrets are configured"

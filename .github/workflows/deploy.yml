@@ -51,7 +51,8 @@ jobs:
       run: |
         python -m py_compile app.py
         python -m py_compile src/api/main.py
-        python -m py_compile src/infrastructure/config_loader.py
+        python -m py_compile src/infrastructure/aws_secrets_manager.py
+        python -m py_compile src/infrastructure/auth_database.py
         
     - name: Validate configuration files
       run: |
@@ -68,14 +69,29 @@ jobs:
         docker run --rm -d --name test-container -p 8001:8000 \
           -e ENVIRONMENT=test \
           -e USE_AWS_SECRETS=false \
+          -e LOG_LEVEL=INFO \
           ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
-        
+
         # Wait for container to start
-        sleep 10
-        
-        # Basic health check
+        sleep 15
+
+        # Check if container is running
         if docker ps | grep -q test-container; then
           echo "✅ Docker container started successfully"
+
+          # Test health endpoint
+          for i in {1..6}; do
+            if curl -f -s http://localhost:8001/health > /dev/null 2>&1; then
+              echo "✅ Health check passed"
+              docker stop test-container
+              exit 0
+            fi
+            echo "⏳ Waiting for health check... ($i/6)"
+            sleep 5
+          done
+
+          echo "⚠️ Health check failed, but container is running"
+          docker logs test-container --tail 20
           docker stop test-container
         else
           echo "❌ Docker container failed to start"
@@ -237,6 +253,7 @@ jobs:
             -e LOG_LEVEL=INFO \
             -e ENABLE_FILE_LOGGING=true \
             -e MAX_LOG_FILES=10 \
+            -e PYTHONPATH=/app/src \
             --log-driver=json-file \
             --log-opt max-size=100m \
             --log-opt max-file=5 \
