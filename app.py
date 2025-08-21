@@ -29,18 +29,21 @@ from typing import Optional
 
 # Load configuration from AWS Secrets Manager
 try:
+    # Add src directory to Python path first
+    sys.path.insert(0, str(Path(__file__).parent / "src"))
+
     from src.infrastructure.config_loader import initialize_config
 
     initialize_config()
     print("✅ Configuration initialized successfully")
-except ImportError:
-    print("⚠️ Configuration system not available, using system environment variables only")
+except ImportError as e:
+    print(f"⚠️ Configuration system not available: {e}")
+    print("⚠️ Using system environment variables only")
 except Exception as e:
     print(f"⚠️ Failed to initialize configuration: {e}")
     print("⚠️ Using system environment variables only")
 
-# Add src directory to Python path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# Python path already added above
 
 # Setup logging
 logging.basicConfig(
