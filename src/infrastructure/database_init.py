@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Database Initialization Script for FluxTrader
+Database Initialization Script for Kamikaze AI
 Creates tables, indexes, and initial data for the PostgreSQL database
 """
 

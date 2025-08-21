@@ -1,10 +1,10 @@
-# Kamikaze Bot - AI-Powered Cryptocurrency Trading Backend
+# Kamikaze AI - AI-Powered Cryptocurrency Trading Backend
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastMCP](https://img.shields.io/badge/FastMCP-2.0-green.svg)](https://gofastmcp.com)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Kamikaze Bot** is an advanced AI-powered cryptocurrency trading backend system that combines real-time market analysis, pump/dump detection, and intelligent decision-making through Groq LLM integration. The system features **FluxTrader** as its core trading engine, built with standards-compliant MCP (Model Context Protocol) architecture for seamless integration and professional-grade reliability.
+**Kamikaze AI** is an advanced AI-powered cryptocurrency trading backend system that combines real-time market analysis, pump/dump detection, and intelligent decision-making through Groq LLM integration. The system features **FluxTrader** as its core trading engine, built with standards-compliant MCP (Model Context Protocol) architecture for seamless integration and professional-grade reliability.
 
 ## 🚀 Key Features
 
@@ -72,7 +72,7 @@ kamikaze-be/
 │   ├── health-check.sh        # System health check
 │   └── init-db.sql           # Database initialization
 │
-├── tests/                      # Test files
+
 │   ├── test_aws.py           # AWS Secrets Manager tests
 │   └── README.md             # Test documentation
 │
@@ -172,7 +172,7 @@ docker run -p 8000:8000 \
 ## 🎯 Core Capabilities
 
 ### FluxTrader Trading Engine
-The heart of Kamikaze Bot is the FluxTrader trading engine, which provides:
+The heart of Kamikaze AI is the FluxTrader trading engine, which provides:
 
 #### Pump/Dump Detection Strategy
 - **Ultra-Aggressive Thresholds**: ±0.03% detection for rapid market movements
@@ -227,24 +227,14 @@ const ws = new WebSocket('ws://localhost:8000/ws/trading-updates');
 
 
 
-## 🧪 Testing
+## 🔍 Health Monitoring
 
 ```bash
-# Test AWS Secrets Manager integration
-python tests/test_aws.py
-
 # System health check
 ./scripts/health-check.sh
 curl http://localhost:8000/health
 
-# API testing
-curl http://localhost:8000/api/info
-curl http://localhost:8000/api/agents
-```
-
-### API Testing
-```bash
-# Test API endpoints
+# API endpoints
 curl http://localhost:8000/api/info
 curl http://localhost:8000/api/agents
 curl http://localhost:8000/api/trading/balance

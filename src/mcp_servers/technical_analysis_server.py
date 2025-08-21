@@ -107,13 +107,20 @@ except ImportError:
     WEB_SCRAPING_AVAILABLE = False
     print("⚠️  Web scraping libraries not available")
 
-# Load environment variables
+# Load configuration from centralized system
 try:
-    from dotenv import load_dotenv
+    from infrastructure.config_loader import initialize_config, get_config_value
 
-    load_dotenv()
+    initialize_config()
+
+    # Use centralized configuration function
+    def get_env_value(key: str, default: Any = None) -> Any:
+        return get_config_value(key, default, str)
+
 except ImportError:
-    pass
+    # Fallback function for direct environment variable access
+    def get_env_value(key: str, default: Any = None) -> Any:
+        return os.getenv(key, default)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -128,9 +135,9 @@ class TechnicalAnalysisMCPServer:
 
     def __init__(self):
         self.server = Server("technical-analysis-mcp-server")
-        self.binance_api_key = os.getenv("BINANCE_API_KEY")
-        self.binance_secret_key = os.getenv("BINANCE_SECRET_KEY")
-        self.alpha_vantage_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        self.binance_api_key = get_env_value("BINANCE_API_KEY")
+        self.binance_secret_key = get_env_value("BINANCE_SECRET_KEY")
+        self.alpha_vantage_key = get_env_value("ALPHA_VANTAGE_API_KEY")
 
         # Market data cache
         self.price_cache = {}

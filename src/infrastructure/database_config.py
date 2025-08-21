@@ -1,5 +1,5 @@
 """
-Database Configuration for FluxTrader
+Database Configuration for Kamikaze AI
 Handles PostgreSQL database configuration and connection management
 Supports both local environment variables and AWS Secrets Manager
 """
@@ -8,15 +8,30 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-# Load environment variables
+# Load configuration from centralized system
 try:
-    from dotenv import load_dotenv
+    from .config_loader import initialize_config, get_config_value
 
-    load_dotenv()
+    initialize_config()
+
+    # Use centralized configuration function
+    def get_db_config_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+        return get_config_value(key, default, type_func)
+
 except ImportError:
-    pass
+    # Fallback function for direct environment variable access
+    def get_db_config_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+        value = os.getenv(key, default)
+        if value is None or value == default:
+            return default
+        try:
+            if type_func == bool:
+                return str(value).lower() in ("true", "1", "yes", "on")
+            return type_func(value)
+        except (ValueError, TypeError):
+            return default
 
 # Import AWS Secrets Manager integration
 try:
@@ -108,19 +123,13 @@ class DatabaseConfig:
             loop.close()
 
     def _load_from_environment(self):
-        """Load configuration from environment variables."""
+        """Load configuration from centralized configuration system."""
         # Use DB_ prefix for consistency with FastMCP server
-        self.host = os.getenv("DB_HOST", os.getenv("POSTGRES_HOST", self.host))
-        self.port = int(
-            os.getenv("DB_PORT", os.getenv("POSTGRES_PORT", str(self.port)))
-        )
-        self.database = os.getenv(
-            "DB_NAME", os.getenv("POSTGRES_DATABASE", self.database)
-        )
-        self.user = os.getenv("DB_USER", os.getenv("POSTGRES_USER", self.user))
-        self.password = os.getenv(
-            "DB_PASSWORD", os.getenv("POSTGRES_PASSWORD", self.password)
-        )
+        self.host = get_db_config_value("DB_HOST") or get_db_config_value("POSTGRES_HOST", self.host)
+        self.port = get_db_config_value("DB_PORT", None, int) or get_db_config_value("POSTGRES_PORT", self.port, int)
+        self.database = get_db_config_value("DB_NAME") or get_db_config_value("POSTGRES_DATABASE", self.database)
+        self.user = get_db_config_value("DB_USER") or get_db_config_value("POSTGRES_USER", self.user)
+        self.password = get_db_config_value("DB_PASSWORD") or get_db_config_value("POSTGRES_PASSWORD", self.password)
 
         # Configure SSL for RDS connections
         if self.host and ".rds.amazonaws.com" in self.host:
@@ -128,30 +137,25 @@ class DatabaseConfig:
             logger.info(f"🔐 Detected RDS host, enabling SSL: {self.host}")
         elif self.host != "localhost":
             self.ssl_mode = "prefer"
-        self.min_pool_size = int(
-            os.getenv(
-                "DB_MIN_SIZE",
-                os.getenv("POSTGRES_MIN_POOL_SIZE", str(self.min_pool_size)),
-            )
+        self.min_pool_size = (
+            get_db_config_value("DB_MIN_SIZE", None, int) or
+            get_db_config_value("POSTGRES_MIN_POOL_SIZE", self.min_pool_size, int)
         )
-        self.max_pool_size = int(
-            os.getenv(
-                "DB_MAX_SIZE",
-                os.getenv("POSTGRES_MAX_POOL_SIZE", str(self.max_pool_size)),
-            )
+        self.max_pool_size = (
+            get_db_config_value("DB_MAX_SIZE", None, int) or
+            get_db_config_value("POSTGRES_MAX_POOL_SIZE", self.max_pool_size, int)
         )
-        self.command_timeout = int(
-            os.getenv(
-                "DB_TIMEOUT",
-                os.getenv("POSTGRES_COMMAND_TIMEOUT", str(self.command_timeout)),
-            )
+        self.command_timeout = (
+            get_db_config_value("DB_TIMEOUT", None, int) or
+            get_db_config_value("POSTGRES_COMMAND_TIMEOUT", self.command_timeout, int)
         )
-        self.ssl_mode = os.getenv(
-            "DB_SSL_MODE", os.getenv("POSTGRES_SSL_MODE", self.ssl_mode)
+        self.ssl_mode = (
+            get_db_config_value("DB_SSL_MODE") or
+            get_db_config_value("POSTGRES_SSL_MODE", self.ssl_mode)
         )
 
         # Handle password for localhost vs production
-        environment = os.getenv("ENVIRONMENT", "development")
+        environment = get_db_config_value("ENVIRONMENT", "development")
 
         if not self.password:
             if self.host == "localhost":
@@ -209,7 +213,7 @@ class DatabaseConfig:
 # Note: Database configuration is now lazy-loaded to avoid early initialization
 # Use DatabaseConfig() directly in your code instead of the global instance
 
-# Database schema definitions for FluxTrader
+# Database schema definitions for Kamikaze AI
 SCHEMA_DEFINITIONS = {
     "users": """
         CREATE TABLE IF NOT EXISTS users (

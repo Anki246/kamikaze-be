@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FluxTrader Agentic AI Application - FastAPI Backend
-Modern multi-agent trading system with real-time WebSocket communication
+Kamikaze AI Application - FastAPI Backend
+Modern multi-agent trading system with FluxTrader integration and real-time WebSocket communication
 
 Features:
 - RESTful API for agent management
@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     global agent_manager, websocket_manager, market_data_api
 
-    logger.info("🚀 Starting FluxTrader Agentic AI Backend...")
+    logger.info("🚀 Starting Kamikaze AI Backend...")
 
     # Initialize managers
     agent_manager = AgentManager()
@@ -133,12 +133,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize credentials database: {e}")
 
-    logger.info("✅ FluxTrader Backend initialized successfully")
+    logger.info("✅ Kamikaze AI Backend initialized successfully")
 
     yield
 
     # Cleanup
-    logger.info("🛑 Shutting down FluxTrader Backend...")
+    logger.info("🛑 Shutting down Kamikaze AI Backend...")
     if agent_manager:
         await agent_manager.shutdown()
     if market_data_api:
@@ -154,13 +154,13 @@ async def lifespan(app: FastAPI):
 
     await credentials_db.disconnect()
 
-    logger.info("✅ FluxTrader Backend shutdown complete")
+    logger.info("✅ Kamikaze AI Backend shutdown complete")
 
 
 # Create FastAPI app with authentication UI
 app = FastAPI(
-    title="FluxTrader Agentic AI API",
-    description="Modern multi-agent trading system with real-time capabilities",
+    title="Kamikaze AI API",
+    description="Modern multi-agent trading system with FluxTrader integration and real-time capabilities",
     version="2.0.0",
     lifespan=lifespan,
     # Add authentication UI to Swagger
@@ -271,7 +271,7 @@ async def root():
 async def api_info():
     """Get API information and available services."""
     return {
-        "message": "🚀 FluxTrader Backend API",
+        "message": "🚀 Kamikaze AI Backend API",
         "description": "Advanced AI-powered trading platform with PostgreSQL integration",
         "version": "2.0.0",
         "status": "operational",
@@ -399,17 +399,17 @@ async def aws_health_check():
     from infrastructure.aws_secrets_manager import AWSSecretsManager
 
     try:
-        if (
-            os.getenv("ENVIRONMENT") == "production"
-            or os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
-        ):
+        # Import centralized configuration
+        from ..infrastructure.config_loader import get_config_value, should_use_aws_secrets
+
+        if should_use_aws_secrets():
             secrets_manager = AWSSecretsManager()
             # Test retrieving database credentials
             db_credentials = secrets_manager.get_database_credentials()
 
             return {
                 "status": "healthy",
-                "aws_region": os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+                "aws_region": get_config_value("AWS_DEFAULT_REGION", "us-east-1"),
                 "secrets_manager": "connected",
                 "database_credentials": "available"
                 if db_credentials

@@ -1,7 +1,7 @@
 """
 Configuration Management for FluxTrader
 Handles JSON configuration files, environment variables, and application settings.
-Priority: config.json > .env file > environment variables > defaults
+Priority: config.json > AWS Secrets Manager > environment variables > defaults
 """
 
 import json
@@ -10,14 +10,31 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-# Load environment variables from .env file
+# Load configuration from AWS Secrets Manager
 try:
-    from dotenv import load_dotenv
+    from ...infrastructure.config_loader import initialize_config, get_config_value
 
-    load_dotenv()
-    print("✅ Loaded environment variables from .env file")
+    initialize_config()
+    print("✅ Configuration initialized successfully")
+
+    # Use centralized configuration function
+    def get_env_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+        return get_config_value(key, default, type_func)
+
 except ImportError:
-    print("⚠️  python-dotenv not available - using system environment variables")
+    print("⚠️ Centralized configuration not available - using system environment variables")
+
+    # Fallback to direct environment variable access
+    def get_env_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+        value = os.getenv(key, default)
+        if value is None or value == default:
+            return default
+        try:
+            if type_func == bool:
+                return str(value).lower() in ("true", "1", "yes", "on")
+            return type_func(value)
+        except (ValueError, TypeError):
+            return default
 
 
 @dataclass
@@ -124,18 +141,18 @@ class APIConfig:
     alpha_vantage_key: Optional[str] = None
 
     def __post_init__(self):
-        """Load API keys from environment variables (Binance credentials now retrieved from database)."""
+        """Load API keys from centralized configuration (Binance credentials now retrieved from database)."""
         # Binance credentials are now primarily retrieved from database
-        # Environment variables are kept for backward compatibility only
-        self.binance_api_key = os.getenv("BINANCE_API_KEY")
-        self.binance_secret_key = os.getenv("BINANCE_SECRET_KEY")
+        # Configuration system is kept for backward compatibility only
+        self.binance_api_key = get_env_value("BINANCE_API_KEY")
+        self.binance_secret_key = get_env_value("BINANCE_SECRET_KEY")
 
-        # Log warning if Binance credentials are found in environment
+        # Log warning if Binance credentials are found in configuration
         if self.binance_api_key or self.binance_secret_key:
-            print("⚠️ Binance credentials found in environment variables. Consider using database storage for better security.")
+            print("⚠️ Binance credentials found in configuration. Consider using database storage for better security.")
 
-        self.groq_api_key = os.getenv("GROQ_API_KEY")
-        self.alpha_vantage_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        self.groq_api_key = get_env_value("GROQ_API_KEY")
+        self.alpha_vantage_key = get_env_value("ALPHA_VANTAGE_API_KEY")
 
 
 @dataclass
@@ -310,11 +327,13 @@ class ConfigManager:
         }
 
         for env_var, (section, attr, type_func) in env_mappings.items():
-            value = os.getenv(env_var)
+            value = get_env_value(env_var, None, str)  # Get as string first
             if value is not None:
                 try:
                     config_obj = getattr(self, section)
-                    setattr(config_obj, attr, type_func(value))
+                    # Convert to proper type
+                    converted_value = type_func(value) if type_func != str else value
+                    setattr(config_obj, attr, converted_value)
                 except (ValueError, TypeError, AttributeError) as e:
                     print(f"⚠️  Invalid environment variable {env_var}={value}: {e}")
 

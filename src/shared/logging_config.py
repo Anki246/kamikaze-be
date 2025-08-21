@@ -1,5 +1,5 @@
 """
-Centralized Logging Configuration for FluxTrader
+Centralized Logging Configuration for Kamikaze AI
 Provides consistent logging setup across all components with proper directory structure.
 """
 

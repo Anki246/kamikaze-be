@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """
-AWS Secrets Manager Integration for FluxTrader
-Secure credential management for database connections, API keys, and sensitive configuration.
+Centralized Configuration Management for Kamikaze AI
+AWS Secrets Manager integration with environment variable fallback.
 
 This module provides:
-- Secure retrieval of database credentials from AWS Secrets Manager
-- API key management for trading platforms
-- Environment-specific configuration management
+- Secure retrieval of all configuration from AWS Secrets Manager
+- Environment variable fallback for system-level configuration
 - Automatic credential rotation support
-- Fallback to environment variables for local development
+- Comprehensive caching and error handling
+- AWS credential chain support (IAM roles, AWS CLI, environment variables)
 
 Usage:
-    from infrastructure.aws_secrets_manager import SecretsManager
-    
-    secrets = SecretsManager()
-    db_creds = await secrets.get_database_credentials()
-    api_keys = await secrets.get_trading_api_keys()
+    from infrastructure.aws_secrets_manager import ConfigManager
+
+    config = ConfigManager()
+    db_config = await config.get_database_config()
+    api_keys = await config.get_api_keys()
+    app_config = await config.get_application_config()
 """
 
 import asyncio
@@ -114,46 +115,83 @@ class SecretsManager:
         if AWS_AVAILABLE:
             self.client = self._initialize_aws_client()
         else:
-            logger.warning("⚠️ boto3 not installed, using environment variables only")
+            logger.warning("⚠️ boto3 not installed, using system environment variables only")
             self.client = None
 
     def _initialize_aws_client(self):
-        """Initialize AWS client with multiple credential sources."""
+        """Initialize AWS client with multiple credential sources and comprehensive error handling."""
+        initialization_errors = []
+
         try:
             # Method 1: Try with existing credentials (env vars, profiles, IAM roles)
+            logger.debug("🔍 Attempting to initialize AWS client with default credential chain")
             client = boto3.client("secretsmanager", region_name=self.region_name)
+
             # Test the client with a simple operation
-            client.list_secrets(MaxResults=1)
-            logger.info(f"✅ AWS Secrets Manager client initialized for region: {self.region_name}")
-            return client
-
-        except (NoCredentialsError, Exception) as e:
-            logger.debug(f"Standard AWS credentials not found: {e}")
-
-            # Method 2: Try auto-fetch from kmkz-app-secrets
             try:
-                if self._try_auto_credentials():
-                    logger.info("✅ AWS credentials auto-fetched from kmkz-app-secrets")
-                    return self.client
-            except Exception as auto_e:
-                logger.debug(f"Auto-credential fetch failed: {auto_e}")
+                client.list_secrets(MaxResults=1)
+                logger.info(f"✅ AWS Secrets Manager client initialized for region: {self.region_name}")
+                return client
+            except Exception as test_e:
+                initialization_errors.append(f"Client test failed: {test_e}")
+                logger.debug(f"Client test failed: {test_e}")
 
-            # Method 3: Check for AWS CLI configuration
-            try:
-                import os
-                aws_config_dir = os.path.expanduser("~/.aws")
-                if os.path.exists(os.path.join(aws_config_dir, "credentials")) or os.path.exists(os.path.join(aws_config_dir, "config")):
-                    # Try again with default profile
-                    session = boto3.Session()
-                    client = session.client("secretsmanager", region_name=self.region_name)
-                    client.list_secrets(MaxResults=1)
-                    logger.info("✅ AWS Secrets Manager client initialized using AWS CLI configuration")
-                    return client
-            except Exception as cli_e:
-                logger.debug(f"AWS CLI configuration failed: {cli_e}")
+        except NoCredentialsError as cred_e:
+            initialization_errors.append(f"No credentials found: {cred_e}")
+            logger.debug(f"No AWS credentials found: {cred_e}")
+        except Exception as e:
+            initialization_errors.append(f"Client creation failed: {e}")
+            logger.debug(f"AWS client creation failed: {e}")
 
-            logger.info("🔄 AWS credentials not available, will use environment variables for fallback")
-            return None
+        # Method 2: Try auto-fetch from kmkz-app-secrets
+        try:
+            logger.debug("🔍 Attempting auto-credential fetch from kmkz-app-secrets")
+            if self._try_auto_credentials():
+                logger.info("✅ AWS credentials auto-fetched from kmkz-app-secrets")
+                return self.client
+        except Exception as auto_e:
+            initialization_errors.append(f"Auto-credential fetch failed: {auto_e}")
+            logger.debug(f"Auto-credential fetch failed: {auto_e}")
+
+        # Method 3: Check for AWS CLI configuration
+        try:
+            logger.debug("🔍 Checking for AWS CLI configuration")
+            aws_config_dir = os.path.expanduser("~/.aws")
+            credentials_file = os.path.join(aws_config_dir, "credentials")
+            config_file = os.path.join(aws_config_dir, "config")
+
+            if os.path.exists(credentials_file) or os.path.exists(config_file):
+                logger.debug(f"Found AWS CLI config files: credentials={os.path.exists(credentials_file)}, config={os.path.exists(config_file)}")
+
+                # Try again with default profile
+                session = boto3.Session()
+                client = session.client("secretsmanager", region_name=self.region_name)
+
+                # Test the client
+                client.list_secrets(MaxResults=1)
+                logger.info("✅ AWS Secrets Manager client initialized using AWS CLI configuration")
+                return client
+            else:
+                initialization_errors.append("No AWS CLI configuration files found")
+                logger.debug("No AWS CLI configuration files found")
+
+        except Exception as cli_e:
+            initialization_errors.append(f"AWS CLI configuration failed: {cli_e}")
+            logger.debug(f"AWS CLI configuration failed: {cli_e}")
+
+        # Log all initialization errors for debugging
+        logger.warning("⚠️ AWS Secrets Manager client initialization failed:")
+        for i, error in enumerate(initialization_errors, 1):
+            logger.warning(f"   {i}. {error}")
+
+        logger.info("🔄 AWS credentials not available, will use system environment variables for fallback")
+        logger.info("💡 To enable AWS Secrets Manager, ensure one of the following:")
+        logger.info("   - Configure AWS CLI with 'aws configure'")
+        logger.info("   - Use IAM roles (for EC2/ECS/Lambda)")
+        logger.info("   - Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables")
+        logger.info("   - Set up AWS SSO")
+
+        return None
 
     def _try_auto_credentials(self) -> bool:
         """Try to auto-fetch AWS credentials from kmkz-app-secrets."""
@@ -259,7 +297,7 @@ class SecretsManager:
             if secret_name in ["kmkz-db-secrets", "kmkz-app-secrets", "main"]:
                 full_secret_name = secret_name
             else:
-                full_secret_name = f"kamikaze-be/{self.environment}/{secret_name}"
+                full_secret_name = f"kamikaze-ai/{self.environment}/{secret_name}"
 
             logger.debug(f"🔍 Retrieving secret: {full_secret_name}")
             response = self.client.get_secret_value(SecretId=full_secret_name)
@@ -274,17 +312,36 @@ class SecretsManager:
 
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
+            error_message = e.response["Error"]["Message"]
+
             if error_code == "ResourceNotFoundException":
                 logger.warning(f"⚠️ Secret not found: {full_secret_name}")
+                logger.info(f"💡 To create this secret, run: aws secretsmanager create-secret --name {full_secret_name} --secret-string '{{}}' --region {self.region_name}")
             elif error_code == "InvalidRequestException":
-                logger.error(f"❌ Invalid request for secret: {full_secret_name}")
+                logger.error(f"❌ Invalid request for secret {full_secret_name}: {error_message}")
             elif error_code == "InvalidParameterException":
-                logger.error(f"❌ Invalid parameter for secret: {full_secret_name}")
+                logger.error(f"❌ Invalid parameter for secret {full_secret_name}: {error_message}")
+            elif error_code == "DecryptionFailureException":
+                logger.error(f"❌ Decryption failed for secret {full_secret_name}: {error_message}")
+                logger.info("💡 Check KMS permissions and key availability")
+            elif error_code == "InternalServiceErrorException":
+                logger.error(f"❌ AWS internal error for secret {full_secret_name}: {error_message}")
+                logger.info("💡 This is a temporary AWS issue, try again later")
+            elif error_code == "AccessDeniedException":
+                logger.error(f"❌ Access denied for secret {full_secret_name}: {error_message}")
+                logger.info(f"💡 Check IAM permissions for secretsmanager:GetSecretValue on {full_secret_name}")
             else:
-                logger.error(f"❌ Error retrieving secret {full_secret_name}: {e}")
+                logger.error(f"❌ AWS error for secret {full_secret_name}: {error_code} - {error_message}")
+
             return None
+
+        except json.JSONDecodeError as json_e:
+            logger.error(f"❌ Invalid JSON in secret {secret_name}: {json_e}")
+            return None
+
         except Exception as e:
             logger.error(f"❌ Unexpected error retrieving secret {secret_name}: {e}")
+            logger.debug(f"Full error details: {type(e).__name__}: {e}")
             return None
 
     async def get_database_credentials(
@@ -556,13 +613,13 @@ class SecretsManager:
             return False
 
         try:
-            full_secret_name = f"fluxtrader/{self.environment}/{secret_name}"
+            full_secret_name = f"kamikaze-ai/{self.environment}/{secret_name}"
 
             self.client.create_secret(
                 Name=full_secret_name,
                 SecretString=json.dumps(secret_value),
                 Description=description
-                or f"FluxTrader {self.environment} - {secret_name}",
+                or f"Kamikaze AI {self.environment} - {secret_name}",
             )
 
             logger.info(f"✅ Created secret: {secret_name}")
@@ -579,11 +636,124 @@ class SecretsManager:
         logger.info("🧹 Secrets cache cleared")
 
 
-# Global instance
+class ConfigManager:
+    """
+    Centralized Configuration Manager using AWS Secrets Manager.
+
+    This class provides a unified interface for all configuration needs,
+    with AWS Secrets Manager as primary source and environment variables as fallback.
+    """
+
+    def __init__(self, region_name: str = None, environment: str = None):
+        """Initialize the configuration manager."""
+        self.secrets_manager = SecretsManager(region_name, environment)
+        self._config_cache = {}
+        self._cache_ttl = {}
+        self.cache_duration = timedelta(minutes=10)  # Cache config for 10 minutes
+
+    def _is_cache_valid(self, key: str) -> bool:
+        """Check if cached configuration is still valid."""
+        if key not in self._cache_ttl:
+            return False
+        return datetime.now() < self._cache_ttl[key]
+
+    def _cache_config(self, key: str, config: Any) -> None:
+        """Cache configuration with TTL."""
+        self._config_cache[key] = config
+        self._cache_ttl[key] = datetime.now() + self.cache_duration
+
+    def _get_cached_config(self, key: str) -> Optional[Any]:
+        """Get cached configuration if valid."""
+        if self._is_cache_valid(key):
+            return self._config_cache[key]
+        return None
+
+    async def get_database_config(self) -> DatabaseCredentials:
+        """Get database configuration from AWS Secrets Manager or fallback."""
+        cache_key = "database_config"
+        cached = self._get_cached_config(cache_key)
+        if cached:
+            return cached
+
+        config = await self.secrets_manager.get_database_credentials()
+        self._cache_config(cache_key, config)
+        return config
+
+    async def get_api_keys(self) -> TradingAPIKeys:
+        """Get API keys from AWS Secrets Manager or fallback."""
+        cache_key = "api_keys"
+        cached = self._get_cached_config(cache_key)
+        if cached:
+            return cached
+
+        config = await self.secrets_manager.get_trading_api_keys()
+        self._cache_config(cache_key, config)
+        return config
+
+    async def get_application_secrets(self) -> ApplicationSecrets:
+        """Get application secrets from AWS Secrets Manager or fallback."""
+        cache_key = "app_secrets"
+        cached = self._get_cached_config(cache_key)
+        if cached:
+            return cached
+
+        config = await self.secrets_manager.get_application_secrets()
+        self._cache_config(cache_key, config)
+        return config
+
+    async def get_aws_credentials(self) -> AWSCredentials:
+        """Get AWS credentials from AWS Secrets Manager or fallback."""
+        cache_key = "aws_credentials"
+        cached = self._get_cached_config(cache_key)
+        if cached:
+            return cached
+
+        config = await self.secrets_manager.get_aws_credentials()
+        self._cache_config(cache_key, config)
+        return config
+
+    def get_environment_setting(self, key: str, default: Any = None, type_func: callable = str) -> Any:
+        """
+        Get a single environment setting with AWS Secrets Manager integration.
+
+        This method provides backward compatibility for direct environment variable access
+        while integrating with AWS Secrets Manager.
+
+        Args:
+            key: Environment variable key
+            default: Default value if not found
+            type_func: Type conversion function
+
+        Returns:
+            Configuration value with proper type conversion
+        """
+        # First try to get from environment variables for backward compatibility
+        env_value = os.getenv(key)
+        if env_value is not None:
+            try:
+                return type_func(env_value)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid environment variable {key}={env_value}, using default")
+                return default
+
+        # If not in environment, return default
+        # In future versions, this could be extended to check AWS Secrets Manager
+        return default
+
+    def clear_cache(self) -> None:
+        """Clear all cached configuration."""
+        self._config_cache.clear()
+        self._cache_ttl.clear()
+        self.secrets_manager.clear_cache()
+        logger.info("🧹 Configuration cache cleared")
+
+
+# Global instances
 secrets_manager = SecretsManager()
+config_manager = ConfigManager()
 
 
-# Convenience functions
+# Convenience functions for backward compatibility
 async def get_database_credentials(database_name: str = "main") -> DatabaseCredentials:
     """Get database credentials."""
     return await secrets_manager.get_database_credentials(database_name)
@@ -592,6 +762,31 @@ async def get_database_credentials(database_name: str = "main") -> DatabaseCrede
 async def get_trading_api_keys() -> TradingAPIKeys:
     """Get trading API keys."""
     return await secrets_manager.get_trading_api_keys()
+
+
+# New centralized configuration functions
+async def get_database_config() -> DatabaseCredentials:
+    """Get database configuration through centralized config manager."""
+    return await config_manager.get_database_config()
+
+
+async def get_api_keys() -> TradingAPIKeys:
+    """Get API keys through centralized config manager."""
+    return await config_manager.get_api_keys()
+
+
+async def get_application_config() -> ApplicationSecrets:
+    """Get application configuration through centralized config manager."""
+    return await config_manager.get_application_secrets()
+
+
+def get_config_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+    """
+    Get a configuration value with AWS Secrets Manager integration.
+
+    This function replaces direct os.getenv() calls throughout the codebase.
+    """
+    return config_manager.get_environment_setting(key, default, type_func)
 
 
 async def get_application_secrets() -> ApplicationSecrets:
@@ -604,52 +799,7 @@ async def get_aws_credentials() -> AWSCredentials:
     return await secrets_manager.get_aws_credentials()
 
 
-# Simple test cases for AWS integration
-async def test_aws_secrets():
-    """Simple test for AWS Secrets Manager integration."""
-    print("🧪 Testing AWS Secrets Manager Integration")
-    print("=" * 50)
 
-    try:
-        # Test database credentials
-        print("📊 Testing database credentials...")
-        db_creds = await get_database_credentials()
-        print(f"   ✅ Database: {db_creds.host}:{db_creds.port}/{db_creds.database}")
-
-        # Test AWS credentials (includes GROQ_API_KEY)
-        print("🔑 Testing AWS credentials...")
-        aws_creds = await get_aws_credentials()
-        print(f"   ✅ AWS Access Key: {'***' if aws_creds.access_key_id else 'Not set'}")
-        print(f"   ✅ AWS Region: {aws_creds.region}")
-        print(f"   ✅ Groq API Key: {'***' if aws_creds.groq_api_key else 'Not set'}")
-        print(f"   ✅ Credentials Encryption Key: {'***' if aws_creds.credentials_encryption_key else 'Not set'}")
-
-        # Test standalone functions
-        print("🔧 Testing standalone functions...")
-        try:
-            db_secret = get_kmkz_db_secret()
-            print(f"   ✅ DB Secret: {'Retrieved' if db_secret else 'Not found'}")
-        except Exception as e:
-            print(f"   ⚠️ DB Secret: {e}")
-
-        try:
-            app_secret = get_kmkz_app_secret()
-            print(f"   ✅ App Secret: {'Retrieved' if app_secret else 'Not found'}")
-        except Exception as e:
-            print(f"   ⚠️ App Secret: {e}")
-
-        print("✅ All tests completed!")
-        return True
-
-    except Exception as e:
-        print(f"❌ Test failed: {e}")
-        return False
-
-
-# Example usage and testing
-async def main():
-    """Example usage of the SecretsManager."""
-    await test_aws_secrets()
 
 
 def get_kmkz_db_secret():

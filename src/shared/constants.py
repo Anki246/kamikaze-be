@@ -1,5 +1,5 @@
 """
-Shared Constants for FluxTrader
+Shared Constants for Kamikaze AI
 Contains common constants used across the application.
 """
 

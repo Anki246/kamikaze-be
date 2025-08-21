@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-FluxTrader Backend Application
-Entry point for starting the FastAPI backend with Binance FastMCP server integration.
+Kamikaze AI Backend Application
+Entry point for starting the FastAPI backend with FluxTrader integration.
 
 This application manages:
 - FastAPI backend server on port 8000
-- Binance FastMCP server integration
+- FluxTrader trading bot integration
 - Agent management and trading operations
 - Real-time WebSocket communication
 
 Usage:
-    python backend_app.py                # Start backend with MCP integration
+    python backend_app.py                # Start backend with FluxTrader integration
     python backend_app.py --port 8000    # Start with custom port
     python backend_app.py --host 0.0.0.0 # Start with custom host
 """
@@ -27,16 +27,17 @@ import time
 from pathlib import Path
 from typing import Optional
 
-# Load environment variables from .env file
+# Load configuration from AWS Secrets Manager
 try:
-    from dotenv import load_dotenv
+    from src.infrastructure.config_loader import initialize_config
 
-    load_dotenv()
-    print("✅ Loaded environment variables from .env file")
+    initialize_config()
+    print("✅ Configuration initialized successfully")
 except ImportError:
-    print("⚠️ python-dotenv not installed, using system environment variables only")
+    print("⚠️ Configuration system not available, using system environment variables only")
 except Exception as e:
-    print(f"⚠️ Failed to load .env file: {e}")
+    print(f"⚠️ Failed to initialize configuration: {e}")
+    print("⚠️ Using system environment variables only")
 
 # Add src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -60,7 +61,7 @@ def signal_handler(signum, frame):
     shutdown_requested = True
 
 
-class FluxTraderBackend:
+class KamikazeAIBackend:
     """Main backend application class."""
 
     def __init__(self, host: str = "0.0.0.0", port: int = 8000):
@@ -75,7 +76,7 @@ class FluxTraderBackend:
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-        logger.info("FluxTrader Backend Application initialized")
+        logger.info("Kamikaze AI Backend Application initialized")
 
     def start_binance_fastmcp_server(self):
         """Start the Binance FastMCP server in a separate process."""
@@ -96,7 +97,7 @@ class FluxTraderBackend:
                 )
 
             # Start the MCP server process with environment variables
-            env = os.environ.copy()  # Copy current environment including .env variables
+            env = os.environ.copy()  # Copy current environment variables
             src_path = str(Path(__file__).parent / "src")
             env["PYTHONPATH"] = src_path  # Add src to Python path
             self.mcp_server_process = subprocess.Popen(
@@ -147,7 +148,7 @@ class FluxTraderBackend:
                 )
 
             # Start the PostgreSQL MCP server process with environment variables
-            env = os.environ.copy()  # Copy current environment including .env variables
+            env = os.environ.copy()  # Copy current environment variables
             self.postgres_mcp_process = subprocess.Popen(
                 [sys.executable, str(postgres_mcp_server_path)],
                 stdout=subprocess.PIPE,
@@ -293,7 +294,7 @@ class FluxTraderBackend:
     async def start(self):
         """Start the complete backend system."""
         try:
-            logger.info("🚀 Starting FluxTrader Backend System")
+            logger.info("🚀 Starting Kamikaze AI Backend System")
             logger.info("=" * 60)
 
             # Start Binance FastMCP Server first
@@ -317,7 +318,7 @@ class FluxTraderBackend:
 
             self.running = True
 
-            logger.info("✅ FluxTrader Backend System started successfully!")
+            logger.info("✅ Kamikaze AI Backend System started successfully!")
             logger.info("=" * 60)
             logger.info(f"🌐 FastAPI Backend: http://{self.host}:{self.port}")
             logger.info(f"📡 Binance FastMCP Server: Running")
@@ -397,7 +398,7 @@ class FluxTraderBackend:
             except Exception as cleanup_error:
                 logger.warning(f"Cleanup warning: {cleanup_error}")
 
-            logger.info("✅ FluxTrader Backend System shutdown complete")
+            logger.info("✅ Kamikaze AI Backend System shutdown complete")
 
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
@@ -405,7 +406,7 @@ class FluxTraderBackend:
 
 async def main():
     """Main function."""
-    parser = argparse.ArgumentParser(description="FluxTrader Backend System")
+    parser = argparse.ArgumentParser(description="Kamikaze AI Backend System")
     parser.add_argument("--port", type=int, default=8000, help="FastAPI server port")
     parser.add_argument(
         "--host", type=str, default="0.0.0.0", help="FastAPI server host"
@@ -414,7 +415,7 @@ async def main():
     args = parser.parse_args()
 
     # Create and start backend application
-    backend = FluxTraderBackend(host=args.host, port=args.port)
+    backend = KamikazeAIBackend(host=args.host, port=args.port)
 
     try:
         await backend.start()

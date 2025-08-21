@@ -70,13 +70,20 @@ except ImportError:
     WEBSOCKET_AVAILABLE = False
     print("⚠️  WebSocket support not available", file=sys.stderr)
 
-# Load environment variables
+# Load configuration from centralized system
 try:
-    from dotenv import load_dotenv
+    from infrastructure.config_loader import initialize_config, get_config_value
 
-    load_dotenv()
+    initialize_config()
+
+    # Use centralized configuration function
+    def get_env_value(key: str, default: Any = None) -> Any:
+        return get_config_value(key, default, str)
+
 except ImportError:
-    pass
+    # Fallback function for direct environment variable access
+    def get_env_value(key: str, default: Any = None) -> Any:
+        return os.getenv(key, default)
 
 # Configure logging to stderr (stdout reserved for MCP protocol)
 logging.basicConfig(
@@ -286,7 +293,7 @@ async def make_binance_request(
     try:
         # Create proper SSL context with certificate verification
         # Check if SSL verification should be disabled (for development/testing)
-        disable_ssl = os.getenv("DISABLE_SSL_VERIFICATION", "false").lower() == "true"
+        disable_ssl = get_env_value("DISABLE_SSL_VERIFICATION", "false").lower() == "true"
 
         if disable_ssl:
             logger.warning(

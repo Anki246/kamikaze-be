@@ -26,18 +26,23 @@ import asyncpg
 # Pydantic imports for input validation
 from pydantic import BaseModel, Field
 
-# Load environment variables from .env file
+# Load configuration from AWS Secrets Manager
 try:
-    from dotenv import load_dotenv
+    # Add parent directory to path to import config_loader
+    import sys
+    from pathlib import Path
+    parent_dir = Path(__file__).parent.parent
+    sys.path.insert(0, str(parent_dir))
 
-    load_dotenv()
-    print("✅ PostgreSQL FastMCP Server: Loaded environment variables from .env file")
+    from infrastructure.config_loader import initialize_config
+
+    initialize_config()
+    print("✅ PostgreSQL FastMCP Server: Configuration initialized successfully")
 except ImportError:
-    print(
-        "⚠️ PostgreSQL FastMCP Server: python-dotenv not installed, using system environment variables only"
-    )
+    print("⚠️ PostgreSQL FastMCP Server: Configuration system not available, using system environment variables only")
 except Exception as e:
-    print(f"⚠️ PostgreSQL FastMCP Server: Failed to load .env file: {e}")
+    print(f"⚠️ PostgreSQL FastMCP Server: Failed to initialize configuration: {e}")
+    print("⚠️ PostgreSQL FastMCP Server: Using system environment variables only")
 
 
 # FastMCP imports
@@ -67,23 +72,30 @@ def load_database_config():
             config = json.load(f)
         db_config_file = config.get("database", {})
 
-        # Build configuration with environment variables for sensitive data
+        # Import centralized configuration
+        try:
+            from infrastructure.config_loader import get_config_value
+            get_env = get_config_value
+        except ImportError:
+            get_env = os.getenv
+
+        # Build configuration with centralized configuration system
         db_config = {
-            # Sensitive credentials from environment variables
-            "host": os.getenv("DB_HOST", "localhost"),
-            "port": int(os.getenv("DB_PORT", "5432")),
-            "database": os.getenv("DB_NAME", "kamikaze"),
-            "user": os.getenv("DB_USER", "postgres"),
-            "password": os.getenv("DB_PASSWORD"),  # No default for security
-            # Non-sensitive config from config.json with env override
+            # Sensitive credentials from centralized configuration
+            "host": get_env("DB_HOST", "localhost"),
+            "port": int(get_env("DB_PORT", "5432")),
+            "database": get_env("DB_NAME", "kamikaze"),
+            "user": get_env("DB_USER", "postgres"),
+            "password": get_env("DB_PASSWORD"),  # No default for security
+            # Non-sensitive config from config.json with config override
             "min_size": int(
-                os.getenv("DB_MIN_SIZE", str(db_config_file.get("min_size", 5)))
+                get_env("DB_MIN_SIZE", str(db_config_file.get("min_size", 5)))
             ),
             "max_size": int(
-                os.getenv("DB_MAX_SIZE", str(db_config_file.get("max_size", 20)))
+                get_env("DB_MAX_SIZE", str(db_config_file.get("max_size", 20)))
             ),
             "command_timeout": int(
-                os.getenv("DB_TIMEOUT", str(db_config_file.get("command_timeout", 60)))
+                get_env("DB_TIMEOUT", str(db_config_file.get("command_timeout", 60)))
             ),
             "ssl": os.getenv("DB_SSL", "false").lower() == "true"
             or db_config_file.get("ssl", False),

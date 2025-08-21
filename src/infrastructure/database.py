@@ -9,7 +9,29 @@ from typing import Any, List, Optional, Tuple
 
 import psycopg2
 import psycopg2.pool
-from dotenv import load_dotenv
+
+# Load configuration from centralized system
+try:
+    from .config_loader import initialize_config, get_config_value
+
+    initialize_config()
+
+    # Use centralized configuration function
+    def get_db_env_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+        return get_config_value(key, default, type_func)
+
+except ImportError:
+    # Fallback function for direct environment variable access
+    def get_db_env_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+        value = os.getenv(key, default)
+        if value is None or value == default:
+            return default
+        try:
+            if type_func == bool:
+                return str(value).lower() in ("true", "1", "yes", "on")
+            return type_func(value)
+        except (ValueError, TypeError):
+            return default
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +63,12 @@ class DatabaseConnection:
             True if successful, False otherwise
         """
         try:
-            # Load environment variables
-            load_dotenv()
-
-            # Get database configuration from environment variables
-            db_host = os.getenv("DB_HOST", "localhost")
-            db_port = os.getenv("DB_PORT", "5432")
-            db_name = os.getenv("DB_NAME", "billa_agent")
-            db_user = os.getenv("DB_USER", "postgres")
-            db_password = os.getenv("DB_PASSWORD", "")
+            # Get database configuration from centralized system
+            db_host = get_db_env_value("DB_HOST", "localhost")
+            db_port = get_db_env_value("DB_PORT", "5432")
+            db_name = get_db_env_value("DB_NAME", "billa_agent")
+            db_user = get_db_env_value("DB_USER", "postgres")
+            db_password = get_db_env_value("DB_PASSWORD", "")
 
             # Create connection pool
             self.connection_pool = psycopg2.pool.ThreadedConnectionPool(

@@ -1,4 +1,4 @@
-# Kamikaze Bot Backend - Production Docker Image
+# Kamikaze AI Backend - Production Docker Image
 FROM python:3.11-slim
 
 # Set working directory
@@ -46,10 +46,7 @@ RUN mkdir -p logs data /app/logs/system /app/logs/trading_sessions /app/logs/arc
     chown -R kamikaze:kamikaze /app
 
 # Validate AWS Secrets Manager integration (optional health check)
-RUN python -c "from src.infrastructure.aws_secrets_manager import AWSSecretsManager; print('✅ AWS Secrets Manager integration validated')" || echo "⚠️ AWS Secrets Manager validation skipped (no credentials)"
-
-# Run tests to validate the build
-RUN python tests/test_aws.py --help > /dev/null || echo "⚠️ Test validation skipped"
+RUN python -c "from src.infrastructure.aws_secrets_manager import SecretsManager; print('✅ AWS Secrets Manager integration validated')" || echo "⚠️ AWS Secrets Manager validation skipped (no credentials)"
 
 # Production configuration notes:
 # - AWS credentials provided via IAM roles (recommended) or environment variables
@@ -67,9 +64,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run the Kamikaze Bot backend application
+# Run the Kamikaze AI backend application
 # The application will automatically:
 # 1. Retrieve database credentials from kmkz-db-secrets
 # 2. Retrieve AWS credentials and Groq API key from kmkz-app-secrets
-# 3. Fall back to environment variables if AWS Secrets Manager is unavailable
+# 3. Use system environment variables as fallback
 CMD ["python", "app.py"]

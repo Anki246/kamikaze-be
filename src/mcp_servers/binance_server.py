@@ -125,13 +125,20 @@ except ImportError:
     WEBSOCKET_AVAILABLE = False
     print("⚠️  WebSocket support not available - install websockets package")
 
-# Load environment variables
+# Load configuration from centralized system
 try:
-    from dotenv import load_dotenv
+    from infrastructure.config_loader import initialize_config, get_config_value
 
-    load_dotenv()
+    initialize_config()
+
+    # Use centralized configuration function
+    def get_env_value(key: str, default: Any = None) -> Any:
+        return get_config_value(key, default, str)
+
 except ImportError:
-    pass
+    # Fallback function for direct environment variable access
+    def get_env_value(key: str, default: Any = None) -> Any:
+        return os.getenv(key, default)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -146,9 +153,9 @@ class BinanceMCPServer:
 
     def __init__(self):
         self.server = Server("binance-mcp-server")
-        self.api_key = os.getenv("BINANCE_API_KEY")
-        self.secret_key = os.getenv("BINANCE_SECRET_KEY")
-        self.alpha_vantage_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        self.api_key = get_env_value("BINANCE_API_KEY")
+        self.secret_key = get_env_value("BINANCE_SECRET_KEY")
+        self.alpha_vantage_key = get_env_value("ALPHA_VANTAGE_API_KEY")
         self.base_url = "https://api.binance.com"
         self.futures_base_url = "https://fapi.binance.com"
         self.ws_base_url = "wss://stream.binance.com:9443/ws"
