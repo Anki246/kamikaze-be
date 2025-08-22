@@ -1,15 +1,25 @@
-# Kamikaze AI - GitHub Actions Deployment
+# Kamikaze AI - CI/CD Pipeline Documentation
 
-This directory contains the GitHub Actions workflow for automated deployment of the Kamikaze AI backend to AWS EC2.
+This directory contains the complete CI/CD pipeline for the Kamikaze AI backend, including continuous integration, deployment, security scanning, and monitoring workflows.
 
-## 🚀 Deployment Workflow
+## 🚀 Pipeline Overview
 
-The `deploy.yml` workflow provides:
-- **Zero-downtime deployment** with health checks
-- **Automatic rollback** on deployment failures
-- **Docker containerization** with image caching
-- **AWS Secrets Manager integration** for secure configuration
+The CI/CD pipeline consists of multiple workflows:
+
+### **Core Workflows**
+- **`ci.yml`** - Continuous Integration (code quality, testing, build validation)
+- **`deploy.yml`** - Continuous Deployment (zero-downtime deployment to AWS EC2)
+- **`security.yml`** - Security scanning (dependencies, code, containers, secrets)
+- **`monitoring.yml`** - Health monitoring and alerting
+
+### **Key Features**
+- **Zero-downtime deployment** with automatic rollback
+- **Comprehensive testing** with coverage reporting
 - **Multi-environment support** (production/staging)
+- **Security scanning** at multiple levels
+- **Real-time monitoring** and alerting
+- **Docker containerization** with vulnerability scanning
+- **AWS Secrets Manager integration**
 
 ## 📋 Prerequisites
 

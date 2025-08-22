@@ -1,0 +1,270 @@
+name: Kamikaze AI - Monitoring & Health Checks
+
+on:
+  schedule:
+    # Run health checks every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to monitor'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+      alert_threshold:
+        description: 'Alert threshold (consecutive failures)'
+        required: false
+        default: '3'
+        type: string
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ============================================================================
+  # HEALTH MONITORING
+  # ============================================================================
+  
+  health-check:
+    name: Health Check - ${{ github.event.inputs.environment || 'production' }}
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set environment variables
+      run: |
+        ENVIRONMENT="${{ github.event.inputs.environment || 'production' }}"
+        echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
+        
+        if [ "$ENVIRONMENT" = "production" ]; then
+          echo "EC2_HOST=${{ secrets.EC2_HOST }}" >> $GITHUB_ENV
+          echo "EC2_USER=${{ secrets.EC2_USER }}" >> $GITHUB_ENV
+        else
+          echo "EC2_HOST=${{ secrets.EC2_HOST_STAGING }}" >> $GITHUB_ENV
+          echo "EC2_USER=${{ secrets.EC2_USER_STAGING }}" >> $GITHUB_ENV
+        fi
+        
+    - name: Setup SSH key
+      run: |
+        mkdir -p ~/.ssh
+        if [ "${{ env.ENVIRONMENT }}" = "production" ]; then
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        else
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY_STAGING }}" > ~/.ssh/id_rsa
+        fi
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H "${{ env.EC2_HOST }}" >> ~/.ssh/known_hosts || true
+        
+    - name: Comprehensive health check
+      id: health_check
+      run: |
+        echo "🏥 Running comprehensive health check for ${{ env.ENVIRONMENT }}..."
+        
+        # Initialize status variables
+        OVERALL_STATUS="healthy"
+        ISSUES=()
+        
+        # Check if EC2 instance is reachable
+        if ! ssh -i ~/.ssh/id_rsa -o ConnectTimeout=10 ${{ env.EC2_USER }}@${{ env.EC2_HOST }} 'echo "SSH connection successful"'; then
+          OVERALL_STATUS="unhealthy"
+          ISSUES+=("SSH connection failed")
+          echo "❌ SSH connection failed"
+        else
+          echo "✅ SSH connection successful"
+          
+          # Check if Docker container is running
+          CONTAINER_STATUS=$(ssh -i ~/.ssh/id_rsa ${{ env.EC2_USER }}@${{ env.EC2_HOST }} '
+            docker ps --filter name=kamikaze-ai-backend --format "{{.Status}}" 2>/dev/null || echo "NOT_FOUND"
+          ')
+          
+          if [[ $CONTAINER_STATUS == *"Up"* ]]; then
+            echo "✅ Container is running: $CONTAINER_STATUS"
+          else
+            OVERALL_STATUS="unhealthy"
+            ISSUES+=("Container not running: $CONTAINER_STATUS")
+            echo "❌ Container not running: $CONTAINER_STATUS"
+          fi
+          
+          # Check health endpoint
+          HEALTH_RESPONSE=$(ssh -i ~/.ssh/id_rsa ${{ env.EC2_USER }}@${{ env.EC2_HOST }} '
+            curl -f -s -m 10 http://localhost:8000/health 2>/dev/null || echo "FAILED"
+          ')
+          
+          if [[ $HEALTH_RESPONSE != "FAILED" ]]; then
+            echo "✅ Health endpoint responding"
+          else
+            OVERALL_STATUS="unhealthy"
+            ISSUES+=("Health endpoint not responding")
+            echo "❌ Health endpoint not responding"
+          fi
+          
+          # Check API endpoint
+          API_RESPONSE=$(ssh -i ~/.ssh/id_rsa ${{ env.EC2_USER }}@${{ env.EC2_HOST }} '
+            curl -f -s -m 10 http://localhost:8000/api/info 2>/dev/null | grep -o "Kamikaze" || echo "FAILED"
+          ')
+          
+          if [[ $API_RESPONSE == "Kamikaze" ]]; then
+            echo "✅ API endpoint responding correctly"
+          else
+            OVERALL_STATUS="degraded"
+            ISSUES+=("API endpoint not responding correctly")
+            echo "⚠️ API endpoint not responding correctly"
+          fi
+          
+          # Check system resources
+          RESOURCE_CHECK=$(ssh -i ~/.ssh/id_rsa ${{ env.EC2_USER }}@${{ env.EC2_HOST }} '
+            # Check CPU usage
+            CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | awk "{print \$2}" | cut -d"%" -f1)
+            
+            # Check memory usage
+            MEMORY_USAGE=$(free | grep Mem | awk "{printf \"%.1f\", \$3/\$2 * 100.0}")
+            
+            # Check disk usage
+            DISK_USAGE=$(df -h / | awk "NR==2 {print \$5}" | cut -d"%" -f1)
+            
+            echo "CPU:${CPU_USAGE}% MEM:${MEMORY_USAGE}% DISK:${DISK_USAGE}%"
+          ')
+          
+          echo "📊 System resources: $RESOURCE_CHECK"
+          
+          # Parse resource usage and check thresholds
+          CPU_USAGE=$(echo $RESOURCE_CHECK | grep -o "CPU:[0-9.]*" | cut -d: -f2)
+          MEM_USAGE=$(echo $RESOURCE_CHECK | grep -o "MEM:[0-9.]*" | cut -d: -f2)
+          DISK_USAGE=$(echo $RESOURCE_CHECK | grep -o "DISK:[0-9.]*" | cut -d: -f2)
+          
+          # Check resource thresholds
+          if (( $(echo "$CPU_USAGE > 80" | bc -l) )); then
+            OVERALL_STATUS="degraded"
+            ISSUES+=("High CPU usage: ${CPU_USAGE}%")
+            echo "⚠️ High CPU usage: ${CPU_USAGE}%"
+          fi
+          
+          if (( $(echo "$MEM_USAGE > 85" | bc -l) )); then
+            OVERALL_STATUS="degraded"
+            ISSUES+=("High memory usage: ${MEM_USAGE}%")
+            echo "⚠️ High memory usage: ${MEM_USAGE}%"
+          fi
+          
+          if (( $(echo "$DISK_USAGE > 90" | bc -l) )); then
+            OVERALL_STATUS="degraded"
+            ISSUES+=("High disk usage: ${DISK_USAGE}%")
+            echo "⚠️ High disk usage: ${DISK_USAGE}%"
+          fi
+        fi
+        
+        # Set outputs
+        echo "status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
+        echo "issues=${ISSUES[*]}" >> $GITHUB_OUTPUT
+        echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+        
+        # Summary
+        echo "🏥 Health check completed"
+        echo "Status: $OVERALL_STATUS"
+        if [ ${#ISSUES[@]} -gt 0 ]; then
+          echo "Issues found: ${ISSUES[*]}"
+        fi
+        
+    - name: Update health status
+      run: |
+        echo "# 🏥 Kamikaze AI Health Check Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📊 Status: ${{ steps.health_check.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ env.ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamp**: ${{ steps.health_check.outputs.timestamp }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Host**: ${{ env.EC2_HOST }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.health_check.outputs.status }}" != "healthy" ]; then
+          echo "## ⚠️ Issues Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.health_check.outputs.issues }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ✅ All Systems Operational" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+    - name: Send alert notification
+      if: steps.health_check.outputs.status != 'healthy'
+      run: |
+        STATUS="${{ steps.health_check.outputs.status }}"
+        ISSUES="${{ steps.health_check.outputs.issues }}"
+        ENVIRONMENT="${{ env.ENVIRONMENT }}"
+        
+        if [ "$STATUS" = "unhealthy" ]; then
+          EMOJI="🚨"
+          COLOR="danger"
+          PRIORITY="HIGH"
+        else
+          EMOJI="⚠️"
+          COLOR="warning"
+          PRIORITY="MEDIUM"
+        fi
+        
+        MESSAGE="$EMOJI Kamikaze AI Health Alert - $ENVIRONMENT
+        
+        Status: $STATUS
+        Priority: $PRIORITY
+        Issues: $ISSUES
+        Host: ${{ env.EC2_HOST }}
+        Time: ${{ steps.health_check.outputs.timestamp }}"
+        
+        echo "📢 Sending health alert notification..."
+        echo "$MESSAGE"
+        
+        # Send Slack notification if webhook is configured
+        if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"$MESSAGE\",
+              \"color\": \"$COLOR\",
+              \"fields\": [
+                {\"title\": \"Environment\", \"value\": \"$ENVIRONMENT\", \"short\": true},
+                {\"title\": \"Status\", \"value\": \"$STATUS\", \"short\": true},
+                {\"title\": \"Priority\", \"value\": \"$PRIORITY\", \"short\": true},
+                {\"title\": \"Host\", \"value\": \"${{ env.EC2_HOST }}\", \"short\": true}
+              ]
+            }" \
+            "${{ secrets.SLACK_WEBHOOK_URL }}" || echo "⚠️ Failed to send Slack notification"
+        fi
+        
+    - name: Create issue on critical failure
+      if: steps.health_check.outputs.status == 'unhealthy'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const title = `🚨 Critical Health Check Failure - ${{ env.ENVIRONMENT }} - ${new Date().toISOString().split('T')[0]}`;
+          const body = `
+          ## 🚨 Critical System Health Alert
+          
+          The Kamikaze AI backend in **${{ env.ENVIRONMENT }}** environment is experiencing critical issues.
+          
+          **Status**: ${{ steps.health_check.outputs.status }}
+          **Issues**: ${{ steps.health_check.outputs.issues }}
+          **Host**: ${{ env.EC2_HOST }}
+          **Timestamp**: ${{ steps.health_check.outputs.timestamp }}
+          
+          ### Immediate Actions Required:
+          1. Check server accessibility and Docker container status
+          2. Review application logs for errors
+          3. Verify system resources (CPU, memory, disk)
+          4. Consider emergency rollback if necessary
+          
+          ### Monitoring Details:
+          - **Workflow Run**: [${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - **Triggered**: ${{ github.event_name }}
+          
+          This issue was automatically created by the monitoring system.
+          `;
+          
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['critical', 'monitoring', 'health-check', '${{ env.ENVIRONMENT }}']
+          });

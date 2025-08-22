@@ -1,8 +1,10 @@
-name: Deploy Kamikaze AI to AWS EC2
+name: Kamikaze AI - CI/CD Pipeline
 
 on:
   push:
-    branches: [ dev ]
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
   workflow_dispatch:
     inputs:
       environment:
@@ -13,57 +15,203 @@ on:
         options:
         - production
         - staging
+      skip_tests:
+        description: 'Skip tests (emergency deployment only)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   APPLICATION_NAME: kamikaze-ai
   DOCKER_IMAGE_NAME: kamikaze-ai-backend
   HEALTH_CHECK_URL: http://localhost:8000/health
   DEPLOYMENT_TIMEOUT: 300
+  PYTHON_VERSION: '3.11'
 
 jobs:
-  build:
-    name: Build and Test
+  # ============================================================================
+  # CONTINUOUS INTEGRATION PIPELINE
+  # ============================================================================
+
+  code-quality:
+    name: Code Quality & Security
     runs-on: ubuntu-latest
-    
+    if: github.event.inputs.skip_tests != 'true'
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
-    - name: Set up Python 3.11
+
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
-        
+        python-version: ${{ env.PYTHON_VERSION }}
+
     - name: Cache pip dependencies
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-quality-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
+          ${{ runner.os }}-pip-quality-
           ${{ runner.os }}-pip-
-          
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        
+
+    - name: Code formatting check (Black)
+      run: |
+        echo "🎨 Checking code formatting with Black..."
+        black --check --diff --color .
+
+    - name: Import sorting check (isort)
+      run: |
+        echo "📦 Checking import sorting with isort..."
+        isort --check-only --diff --color .
+
+    - name: Linting (Flake8)
+      run: |
+        echo "🔍 Running Flake8 linting..."
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+
+    - name: Security scanning (Bandit)
+      run: |
+        echo "🔒 Running security scan with Bandit..."
+        bandit -r . -f json -o bandit-report.json || true
+        bandit -r . --severity-level medium
+
+    - name: Dependency vulnerability check (Safety)
+      run: |
+        echo "🛡️ Checking dependencies for vulnerabilities..."
+        safety check --json --output safety-report.json || true
+        safety check
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+        retention-days: 30
+
+  test:
+    name: Tests & Coverage
+    runs-on: ubuntu-latest
+    if: github.event.inputs.skip_tests != 'true'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-test-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-test-
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
     - name: Run syntax checks
       run: |
+        echo "🔍 Running syntax validation..."
         python -m py_compile app.py
-        python -m py_compile src/api/main.py
-        python -m py_compile src/infrastructure/aws_secrets_manager.py
-        python -m py_compile src/infrastructure/auth_database.py
-        
+        find src -name "*.py" -exec python -m py_compile {} \;
+
     - name: Validate configuration files
       run: |
+        echo "⚙️ Validating configuration files..."
         python -c "import json; json.load(open('config.json'))"
         echo "✅ Configuration files validated"
-        
+
+    - name: Run unit tests
+      run: |
+        echo "🧪 Running unit tests with coverage..."
+        pytest tests/ -v --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing
+
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-reports
+        path: |
+          coverage.xml
+          htmlcov/
+        retention-days: 30
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: pytest-results.xml
+        retention-days: 30
+
+  build:
+    name: Build & Docker
+    runs-on: ubuntu-latest
+    needs: [code-quality, test]
+    if: always() && (needs.code-quality.result == 'success' || github.event.inputs.skip_tests == 'true') && (needs.test.result == 'success' || github.event.inputs.skip_tests == 'true')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-build-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-build-
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
     - name: Build Docker image
       run: |
+        echo "🐳 Building Docker image..."
         docker build -t ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }} .
         docker tag ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }} ${{ env.DOCKER_IMAGE_NAME }}:latest
-        
+
+    - name: Scan Docker image for vulnerabilities
+      run: |
+        echo "🔍 Scanning Docker image for vulnerabilities..."
+        # Install Trivy for container scanning
+        sudo apt-get update
+        sudo apt-get install wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy
+
+        # Scan the image
+        trivy image --format json --output trivy-report.json ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }} || true
+        trivy image --severity HIGH,CRITICAL ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+
     - name: Test Docker image
       run: |
         echo "🚀 Testing Docker container..."
@@ -80,7 +228,7 @@ jobs:
 
         # Wait for container to start
         echo "⏳ Waiting for container to start..."
-        sleep 10
+        sleep 15
 
         # Check container status
         CONTAINER_STATUS=$(docker ps -a --filter name=test-container --format "{{.Status}}")
@@ -88,35 +236,56 @@ jobs:
 
         # Show container logs regardless of status
         echo "📋 Container logs:"
-        docker logs test-container --tail 20
+        docker logs test-container --tail 30
 
         # Check if container is still running
         if docker ps | grep -q test-container; then
           echo "✅ Docker container is running"
 
-          # Try health check (optional - may not work in test environment)
-          echo "🏥 Attempting health check..."
-          for i in {1..3}; do
+          # Comprehensive health checks
+          echo "🏥 Running comprehensive health checks..."
+
+          # Basic health check
+          for i in {1..5}; do
             if curl -f -s http://localhost:8001/health > /dev/null 2>&1; then
-              echo "✅ Health check passed"
+              echo "✅ Health check passed (attempt $i)"
               break
             fi
-            echo "⏳ Health check attempt $i/3..."
-            sleep 5
+            echo "⏳ Health check attempt $i/5..."
+            sleep 10
           done
+
+          # Test API endpoints
+          echo "🔍 Testing API endpoints..."
+          curl -f -s http://localhost:8001/api/info || echo "⚠️ API info endpoint not available"
 
           echo "✅ Docker test completed successfully"
         else
-          echo "⚠️ Container exited, but this may be expected in CI environment"
-          echo "📋 Exit code: $(docker inspect test-container --format='{{.State.ExitCode}}')"
+          echo "⚠️ Container exited, checking exit code..."
+          EXIT_CODE=$(docker inspect test-container --format='{{.State.ExitCode}}')
+          echo "📋 Exit code: $EXIT_CODE"
 
-          # Don't fail the build if container exits - this is common in CI
-          echo "✅ Docker image builds and starts correctly"
+          if [ "$EXIT_CODE" = "0" ]; then
+            echo "✅ Container exited cleanly (expected in CI environment)"
+          else
+            echo "❌ Container exited with error code $EXIT_CODE"
+            echo "📋 Full container logs:"
+            docker logs test-container
+            exit 1
+          fi
         fi
 
         # Cleanup
         docker stop test-container 2>/dev/null || true
         docker rm test-container 2>/dev/null || true
+
+    - name: Upload container scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: container-scan-results
+        path: trivy-report.json
+        retention-days: 30
         
     - name: Save Docker image
       run: |
@@ -129,11 +298,16 @@ jobs:
         path: kamikaze-ai-image.tar.gz
         retention-days: 1
 
+  # ============================================================================
+  # CONTINUOUS DEPLOYMENT PIPELINE
+  # ============================================================================
+
   deploy:
-    name: Deploy to EC2
+    name: Deploy to ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
     runs-on: ubuntu-latest
     needs: build
-    environment: ${{ github.event.inputs.environment || 'production' }}
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.event_name == 'workflow_dispatch')
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
     
     steps:
     - name: Checkout code
@@ -276,83 +450,38 @@ jobs:
           echo "✅ EC2 environment ready"
         '
 
-    - name: Deploy with zero-downtime
+    - name: Upload deployment script
       run: |
+        scp -i ~/.ssh/id_rsa scripts/deploy.sh \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/deploy.sh
+
         ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
-          set -e
-
-          DOCKER_IMAGE="${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}"
-          CONTAINER_NAME="kamikaze-ai-backend"
-
-          echo "🚀 Starting Kamikaze AI deployment..."
-
-          # Function to check health
-          check_health() {
-            local max_attempts=30
-            local attempt=1
-            while [ $attempt -le $max_attempts ]; do
-              if curl -f -s ${{ env.HEALTH_CHECK_URL }} > /dev/null 2>&1; then
-                echo "✅ Health check passed (attempt $attempt)"
-                return 0
-              fi
-              echo "⏳ Retrying health check... ($attempt/$max_attempts)"
-              sleep 10
-              ((attempt++))
-            done
-            echo "❌ Health check failed"
-            return 1
-          }
-
-          # Stop existing container gracefully
-          if docker ps | grep -q $CONTAINER_NAME; then
-            echo "🛑 Stopping existing container..."
-            docker stop $CONTAINER_NAME --time=30 || true
-            docker rm $CONTAINER_NAME || true
-          fi
-
-          # Start new container
-          echo "🚀 Starting new container..."
-          docker run -d \
-            --name $CONTAINER_NAME \
-            --restart unless-stopped \
-            -p 8000:8000 \
-            -e ENVIRONMENT=production \
-            -e USE_AWS_SECRETS=true \
-            -e AWS_DEFAULT_REGION=${{ secrets.AWS_REGION || 'us-east-1' }} \
-            -e LOG_LEVEL=INFO \
-            -e ENABLE_FILE_LOGGING=true \
-            -e MAX_LOG_FILES=10 \
-            -e PYTHONPATH=/app/src \
-            --log-driver=json-file \
-            --log-opt max-size=100m \
-            --log-opt max-file=5 \
-            $DOCKER_IMAGE
-
-          # Wait and health check
-          echo "⏳ Waiting for container to start..."
-          sleep 15
-
-          if check_health; then
-            echo "🎉 Deployment completed successfully!"
-
-            # Clean up old images (keep last 3)
-            docker images ${{ env.DOCKER_IMAGE_NAME }} --format "{{.Tag}}" | \
-              grep -v latest | sort -r | tail -n +4 | \
-              xargs -r -I {} docker rmi ${{ env.DOCKER_IMAGE_NAME }}:{} 2>/dev/null || true
-
-            docker system prune -f
-          else
-            echo "❌ Deployment failed - health check unsuccessful"
-            docker logs $CONTAINER_NAME --tail 50
-            exit 1
-          fi
+          chmod +x /tmp/deploy.sh
         '
 
-
-
-    - name: Verify deployment
+    - name: Deploy with zero-downtime and rollback capability
       run: |
-        echo "🔍 Verifying deployment..."
+        ENVIRONMENT="${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}"
+        DOCKER_IMAGE="${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}"
+
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
+          export ENVIRONMENT='$ENVIRONMENT'
+          export DOCKER_IMAGE_NAME='${{ env.DOCKER_IMAGE_NAME }}'
+          export CONTAINER_NAME='kamikaze-ai-backend'
+          export HEALTH_CHECK_URL='${{ env.HEALTH_CHECK_URL }}'
+          export AWS_REGION='${{ secrets.AWS_REGION || 'us-east-1' }}'
+          export LOG_LEVEL='INFO'
+
+          /tmp/deploy.sh '$DOCKER_IMAGE'
+        "
+
+
+
+    - name: Comprehensive deployment verification
+      run: |
+        echo "🔍 Running comprehensive deployment verification..."
+
+        ENVIRONMENT="${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}"
 
         # Check if container is running
         CONTAINER_STATUS=$(ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
@@ -367,6 +496,7 @@ jobs:
         fi
 
         # Verify health endpoint
+        echo "🏥 Testing health endpoint..."
         HEALTH_CHECK=$(ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
           curl -f -s ${{ env.HEALTH_CHECK_URL }} || echo "FAILED"
         ')
@@ -379,6 +509,7 @@ jobs:
         fi
 
         # Check API info endpoint
+        echo "🔍 Testing API info endpoint..."
         API_INFO=$(ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
           curl -f -s http://localhost:8000/api/info | jq -r .message 2>/dev/null || echo "FAILED"
         ')
@@ -389,6 +520,34 @@ jobs:
           echo "❌ API is not responding correctly"
           exit 1
         fi
+
+        # Test database connectivity (if applicable)
+        echo "🗄️ Testing database connectivity..."
+        DB_STATUS=$(ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
+          curl -f -s http://localhost:8000/api/health/db 2>/dev/null | jq -r .status 2>/dev/null || echo "UNKNOWN"
+        ')
+
+        if [[ $DB_STATUS == "healthy" ]]; then
+          echo "✅ Database connectivity verified"
+        else
+          echo "⚠️ Database connectivity status: $DB_STATUS"
+        fi
+
+        # Performance check
+        echo "⚡ Running performance check..."
+        RESPONSE_TIME=$(ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
+          curl -o /dev/null -s -w "%{time_total}" http://localhost:8000/health
+        ')
+
+        echo "📊 Health endpoint response time: ${RESPONSE_TIME}s"
+
+        # Log deployment info
+        echo "📋 Deployment Summary:"
+        echo "  Environment: $ENVIRONMENT"
+        echo "  Image: ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}"
+        echo "  Commit: ${{ github.sha }}"
+        echo "  Branch: ${{ github.ref_name }}"
+        echo "  Deployed by: ${{ github.actor }}"
 
     - name: Update system services
       run: |
@@ -424,48 +583,124 @@ jobs:
     - name: Send deployment notification
       if: always()
       run: |
+        ENVIRONMENT="${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}"
+
         if [ "${{ job.status }}" == "success" ]; then
           STATUS="✅ SUCCESS"
           COLOR="good"
-          MESSAGE="Kamikaze AI backend deployed successfully to EC2"
+          MESSAGE="Kamikaze AI backend deployed successfully to $ENVIRONMENT"
+          EMOJI="🚀"
         else
           STATUS="❌ FAILED"
           COLOR="danger"
-          MESSAGE="Kamikaze AI backend deployment failed"
+          MESSAGE="Kamikaze AI backend deployment failed for $ENVIRONMENT"
+          EMOJI="💥"
         fi
 
         echo "Deployment Status: $STATUS"
         echo "Message: $MESSAGE"
 
-        # Add webhook notification here if needed
-        # curl -X POST -H 'Content-type: application/json' \
-        #   --data "{\"text\":\"$MESSAGE\", \"color\":\"$COLOR\"}" \
-        #   ${{ secrets.SLACK_WEBHOOK_URL }}
+        # Create deployment summary
+        SUMMARY="$EMOJI Kamikaze AI Deployment $STATUS
+
+        Environment: $ENVIRONMENT
+        Commit: ${{ github.sha }}
+        Branch: ${{ github.ref_name }}
+        Actor: ${{ github.actor }}
+        Workflow: ${{ github.workflow }}
+        Run: ${{ github.run_number }}"
+
+        echo "📋 Deployment Summary:"
+        echo "$SUMMARY"
+
+        # Send Slack notification if webhook is configured
+        if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+          echo "📢 Sending Slack notification..."
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"$MESSAGE\",
+              \"color\": \"$COLOR\",
+              \"fields\": [
+                {\"title\": \"Environment\", \"value\": \"$ENVIRONMENT\", \"short\": true},
+                {\"title\": \"Commit\", \"value\": \"${{ github.sha }}\", \"short\": true},
+                {\"title\": \"Branch\", \"value\": \"${{ github.ref_name }}\", \"short\": true},
+                {\"title\": \"Actor\", \"value\": \"${{ github.actor }}\", \"short\": true}
+              ]
+            }" \
+            "${{ secrets.SLACK_WEBHOOK_URL }}" || echo "⚠️ Failed to send Slack notification"
+        fi
+
+        # Send email notification if configured
+        if [ -n "${{ secrets.NOTIFICATION_EMAIL }}" ]; then
+          echo "📧 Email notifications not implemented yet"
+        fi
+
+  # ============================================================================
+  # CLEANUP AND REPORTING
+  # ============================================================================
 
   cleanup:
-    name: Cleanup
+    name: Cleanup & Reporting
     runs-on: ubuntu-latest
-    needs: [build, deploy]
+    needs: [code-quality, test, build, deploy]
     if: always()
 
     steps:
-    - name: Clean up artifacts
+    - name: Generate workflow summary
+      run: |
+        echo "# 🚀 Kamikaze AI CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📊 Job Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **Code Quality**: ${{ needs.code-quality.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Tests**: ${{ needs.test.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build**: ${{ needs.build.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deploy**: ${{ needs.deploy.result || 'skipped' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📋 Deployment Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Actor**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Workflow Run**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+
+    - name: Clean up temporary artifacts
       uses: actions/github-script@v7
       with:
         script: |
+          console.log('🧹 Cleaning up temporary artifacts...');
+
           const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
             owner: context.repo.owner,
             repo: context.repo.repo,
             run_id: context.runId,
           });
 
+          const temporaryArtifacts = ['docker-image'];
+          let deletedCount = 0;
+
           for (const artifact of artifacts.data.artifacts) {
-            if (artifact.name === 'docker-image') {
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: artifact.id,
-              });
-              console.log(`Deleted artifact: ${artifact.name}`);
+            if (temporaryArtifacts.includes(artifact.name)) {
+              try {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+                console.log(`✅ Deleted temporary artifact: ${artifact.name}`);
+                deletedCount++;
+              } catch (error) {
+                console.log(`⚠️ Failed to delete artifact ${artifact.name}: ${error.message}`);
+              }
             }
           }
+
+          console.log(`🎯 Cleanup completed: ${deletedCount} artifacts deleted`);
+
+    - name: Archive important artifacts
+      if: always()
+      run: |
+        echo "📦 Important artifacts preserved:"
+        echo "- Security reports (30 days)"
+        echo "- Test results (30 days)"
+        echo "- Coverage reports (30 days)"
+        echo "- Container scan results (30 days)"

@@ -1,0 +1,261 @@
+name: Kamikaze AI - Continuous Integration
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+  push:
+    branches: [ main, dev ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ============================================================================
+  # CODE QUALITY AND SECURITY CHECKS
+  # ============================================================================
+  
+  code-quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-quality-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-quality-
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Code formatting check (Black)
+      run: |
+        echo "🎨 Checking code formatting with Black..."
+        black --check --diff --color .
+        
+    - name: Import sorting check (isort)
+      run: |
+        echo "📦 Checking import sorting with isort..."
+        isort --check-only --diff --color .
+        
+    - name: Linting (Flake8)
+      run: |
+        echo "🔍 Running Flake8 linting..."
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+        
+    - name: Type checking (MyPy)
+      run: |
+        echo "🔍 Running type checking with MyPy..."
+        mypy src --ignore-missing-imports --no-strict-optional || true
+        
+    - name: Security scanning (Bandit)
+      run: |
+        echo "🔒 Running security scan with Bandit..."
+        bandit -r . -f json -o bandit-report.json || true
+        bandit -r . --severity-level medium
+        
+    - name: Dependency vulnerability check (Safety)
+      run: |
+        echo "🛡️ Checking dependencies for vulnerabilities..."
+        safety check --json --output safety-report.json || true
+        safety check
+        
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-reports-${{ github.run_number }}
+        path: |
+          bandit-report.json
+          safety-report.json
+        retention-days: 30
+
+  # ============================================================================
+  # TESTING
+  # ============================================================================
+  
+  test:
+    name: Tests & Coverage
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.11']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-test-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-test-${{ matrix.python-version }}-
+          ${{ runner.os }}-pip-test-
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run syntax checks
+      run: |
+        echo "🔍 Running syntax validation..."
+        python -m py_compile app.py
+        find src -name "*.py" -exec python -m py_compile {} \;
+        
+    - name: Validate configuration files
+      run: |
+        echo "⚙️ Validating configuration files..."
+        python -c "import json; json.load(open('config.json'))"
+        echo "✅ Configuration files validated"
+        
+    - name: Run unit tests
+      run: |
+        echo "🧪 Running unit tests with coverage..."
+        pytest tests/ -v --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing --junitxml=pytest-results.xml
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: always()
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+        
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-reports-${{ matrix.python-version }}-${{ github.run_number }}
+        path: |
+          coverage.xml
+          htmlcov/
+        retention-days: 30
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ matrix.python-version }}-${{ github.run_number }}
+        path: pytest-results.xml
+        retention-days: 30
+
+  # ============================================================================
+  # BUILD VALIDATION
+  # ============================================================================
+  
+  build-validation:
+    name: Build Validation
+    runs-on: ubuntu-latest
+    needs: [code-quality, test]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Build Docker image
+      run: |
+        echo "🐳 Building Docker image for validation..."
+        docker build -t kamikaze-ai-backend:test .
+        
+    - name: Test Docker image
+      run: |
+        echo "🚀 Testing Docker container..."
+        
+        # Start container
+        CONTAINER_ID=$(docker run -d --name test-container -p 8001:8000 \
+          -e ENVIRONMENT=test \
+          -e USE_AWS_SECRETS=false \
+          -e LOG_LEVEL=INFO \
+          -e PYTHONPATH=/app/src \
+          kamikaze-ai-backend:test)
+
+        echo "📋 Container ID: $CONTAINER_ID"
+
+        # Wait for container to start
+        echo "⏳ Waiting for container to start..."
+        sleep 15
+
+        # Check container status
+        CONTAINER_STATUS=$(docker ps -a --filter name=test-container --format "{{.Status}}")
+        echo "📊 Container status: $CONTAINER_STATUS"
+
+        # Show container logs
+        echo "📋 Container logs:"
+        docker logs test-container --tail 30
+
+        # Cleanup
+        docker stop test-container 2>/dev/null || true
+        docker rm test-container 2>/dev/null || true
+        docker rmi kamikaze-ai-backend:test 2>/dev/null || true
+
+  # ============================================================================
+  # SUMMARY
+  # ============================================================================
+  
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [code-quality, test, build-validation]
+    if: always()
+    
+    steps:
+    - name: Generate CI summary
+      run: |
+        echo "# 🚀 Kamikaze AI CI Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📊 Job Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **Code Quality**: ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Tests**: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build Validation**: ${{ needs.build-validation.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📋 Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Actor**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Event**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+        
+        # Determine overall status
+        if [[ "${{ needs.code-quality.result }}" == "success" && "${{ needs.test.result }}" == "success" && "${{ needs.build-validation.result }}" == "success" ]]; then
+          echo "## ✅ Overall Status: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ❌ Overall Status: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi

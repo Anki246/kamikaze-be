@@ -547,6 +547,23 @@ test_*.py
 test_results/
 pytest_cache/
 .pytest_cache/
+htmlcov/
+coverage.xml
+.coverage
+pytest-results.xml
+bandit-report.json
+safety-report.json
+trivy-report.json
+
+# Requirements backup files
+requirements-dev.txt
+requirements.bak
+requirements.old
+requirements-*.txt
+
+# Documentation (removed from project)
+docs/
+*.md.bak
 
 # Development and debugging
 debug/
