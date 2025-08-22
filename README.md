@@ -1,9 +1,11 @@
 # Kamikaze AI - AI-Powered Cryptocurrency Trading Backend
 
-🚀 **Pipeline Status**: Deploying with enhanced SSH setup and secret verification
+🚀 **Pipeline Status**: Unified CI/CD with automated staging and production deployment
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![FastMCP](https://img.shields.io/badge/FastMCP-2.0-green.svg)](https://gofastmcp.com)
+[![Docker](https://img.shields.io/badge/docker-enabled-blue.svg)](https://www.docker.com/)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-green.svg)](https://github.com/features/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Kamikaze AI** is an advanced AI-powered cryptocurrency trading backend system that combines real-time market analysis, pump/dump detection, and intelligent decision-making through Groq LLM integration. The system features **FluxTrader** as its core trading engine, built with standards-compliant MCP (Model Context Protocol) architecture for seamless integration and professional-grade reliability.
@@ -70,13 +72,9 @@ kamikaze-be/
 │   ├── config_manager.py      # Configuration management
 │   └── trading_analyzer.py    # Trading performance analysis
 │
-├── scripts/                    # Utility scripts
-│   ├── health-check.sh        # System health check
-│   └── init-db.sql           # Database initialization
-│
-
-│   ├── test_aws.py           # AWS Secrets Manager tests
-│   └── README.md             # Test documentation
+├── .github/                    # GitHub Actions workflows
+│   └── workflows/
+│       └── ci-cd.yml          # Unified CI/CD pipeline
 │
 ├── logs/                       # Organized log files
 │   ├── system/                # System component logs
@@ -90,11 +88,12 @@ kamikaze-be/
 ## 🛠️ Installation & Setup
 
 ### Prerequisites
-- Python 3.11 or higher
+- Python 3.12 or higher
 - AWS account with Secrets Manager configured:
   - `kmkz-db-secrets`: Database credentials
   - `kmkz-app-secrets`: AWS credentials, Groq API key, encryption keys
 - PostgreSQL database (local or RDS)
+- Docker (for containerized deployment)
 
 ### 1. Clone Repository
 ```bash
@@ -104,8 +103,8 @@ cd kamikaze-be
 
 ### 2. Create Virtual Environment
 ```bash
-python -m venv .venv311
-source .venv311/bin/activate  # On Windows: .venv311\Scripts\activate
+python -m venv .venv312
+source .venv312/bin/activate  # On Windows: .venv312\Scripts\activate
 ```
 
 ### 3. Install Dependencies
@@ -170,6 +169,63 @@ docker run -p 8000:8000 \
   -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
   kamikaze-bot
 ```
+
+## 🔄 CI/CD Pipeline
+
+The project uses a unified GitHub Actions workflow (`.github/workflows/ci-cd.yml`) that handles the complete CI/CD process:
+
+### Pipeline Stages
+
+#### 1. **Build & Validation** 🏗️
+- **Python 3.12** setup with dependency caching
+- **System dependencies** installation (TA-Lib)
+- **Code quality checks** (Black, isort, Flake8)
+- **Project structure validation**
+- **Configuration validation**
+
+#### 2. **Docker Build** 🐳
+- **Multi-stage Docker build** with optimization
+- **Image testing** and validation
+- **Artifact creation** for deployment branches
+
+#### 3. **Staging Deployment** 🚀
+- **Automatic deployment** to staging environment
+- **Branch-specific tagging**:
+  - `main` branch → `staging` tag
+  - `dev` branch → `dev-staging` tag
+- **Health checks** and deployment verification
+
+#### 4. **Production Deployment** 🌟
+- **Main branch only** deployment to production
+- **Automated release creation** with versioning
+- **Production health checks**
+- **Comprehensive notifications**
+
+#### 5. **Rollback Protection** 🛡️
+- **Automatic rollback** on deployment failures
+- **Smart rollback targeting** (staging/production)
+- **Health verification** after rollback
+- **Manual intervention alerts**
+
+### Trigger Conditions
+- **Push to `main`, `dev`, `develop`**: Full pipeline execution
+- **Pull Requests**: Build and validation only (no deployment)
+- **Branch-specific behavior**:
+  - `main` → staging → production
+  - `dev` → dev-staging only
+  - `develop` → validation only
+
+### Docker Registry
+- **GitHub Container Registry** (`ghcr.io`)
+- **Automatic lowercase conversion** for registry compatibility
+- **Multi-tag strategy** for different environments
+
+### Pipeline Status
+You can monitor the pipeline status through:
+- **GitHub Actions tab** in the repository
+- **Commit status checks** on pull requests
+- **Release notes** for production deployments
+- **Container registry** for published images
 
 ## 🎯 Core Capabilities
 
@@ -311,4 +367,19 @@ Configuration is managed through:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
----# Test commit to trigger workflow
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📞 Support
+
+For support and questions:
+- Create an issue on GitHub
+- Check the documentation in the `docs/` directory
+- Review the API documentation at `/docs` endpoint when running locally

@@ -320,18 +320,19 @@ jobs:
         echo "🔍 Determining rollback target..."
 
         # Convert repository name to lowercase for Docker registry
-        IMAGE_NAME_LOWER=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+        IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+        FULL_IMAGE_NAME="${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}"
 
         # Determine which deployment failed and set rollback strategy
         if [ "${{ needs.deploy-production.result }}" = "failure" ]; then
           echo "❌ Production deployment failed"
           echo "target=production" >> $GITHUB_OUTPUT
-          echo "image=${IMAGE_NAME_LOWER}:staging" >> $GITHUB_OUTPUT
+          echo "image=${FULL_IMAGE_NAME}:staging" >> $GITHUB_OUTPUT
           echo "environment=production" >> $GITHUB_OUTPUT
         elif [ "${{ needs.deploy-staging.result }}" = "failure" ]; then
           echo "❌ Staging deployment failed"
           echo "target=staging" >> $GITHUB_OUTPUT
-          echo "image=${IMAGE_NAME_LOWER}:latest" >> $GITHUB_OUTPUT
+          echo "image=${FULL_IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
           echo "environment=staging" >> $GITHUB_OUTPUT
         fi
 
