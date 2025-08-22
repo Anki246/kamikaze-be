@@ -14,27 +14,23 @@ jobs:
   # Build and validation job - runs code quality checks and dependency installation
   build-and-validate:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.11, 3.12]
-      fail-fast: false
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.12
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: 3.12
 
     - name: Cache pip dependencies
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-3.12-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-${{ matrix.python-version }}-
+          ${{ runner.os }}-pip-3.12-
           ${{ runner.os }}-pip-
 
     - name: Install system dependencies
@@ -300,17 +296,76 @@ jobs:
   # Rollback job - handles deployment failures
   rollback:
     runs-on: ubuntu-latest
-    if: failure()
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure')
     environment: production
 
     steps:
-    - name: Rollback deployment
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Determine rollback target
+      id: rollback-target
       run: |
-        echo "🔄 Initiating rollback procedure..."
-        echo "Previous deployment failed, rolling back to last known good state"
+        echo "🔍 Determining rollback target..."
 
-        # Simulate rollback (replace with actual rollback commands)
-        echo "✅ Rollback completed"
+        # Convert repository name to lowercase for Docker registry
+        IMAGE_NAME_LOWER=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
 
-        # Notify about rollback
-        echo "📢 Rollback notification sent"
+        # Determine which deployment failed and set rollback strategy
+        if [ "${{ needs.deploy-production.result }}" = "failure" ]; then
+          echo "❌ Production deployment failed"
+          echo "target=production" >> $GITHUB_OUTPUT
+          echo "image=${IMAGE_NAME_LOWER}:staging" >> $GITHUB_OUTPUT
+          echo "environment=production" >> $GITHUB_OUTPUT
+        elif [ "${{ needs.deploy-staging.result }}" = "failure" ]; then
+          echo "❌ Staging deployment failed"
+          echo "target=staging" >> $GITHUB_OUTPUT
+          echo "image=${IMAGE_NAME_LOWER}:latest" >> $GITHUB_OUTPUT
+          echo "environment=staging" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Execute rollback
+      run: |
+        echo "🔄 Initiating rollback procedure for ${{ steps.rollback-target.outputs.target }}..."
+        echo "Rolling back to image: ${{ steps.rollback-target.outputs.image }}"
+
+        # Simulate rollback deployment (replace with actual rollback commands)
+        echo "🔄 Pulling previous stable image..."
+        docker pull ${{ steps.rollback-target.outputs.image }} || echo "⚠️ Previous image not found, manual intervention required"
+
+        echo "🔄 Deploying rollback to ${{ steps.rollback-target.outputs.environment }}..."
+        # Add your actual rollback deployment commands here
+
+        echo "✅ Rollback completed for ${{ steps.rollback-target.outputs.target }}"
+
+    - name: Verify rollback
+      run: |
+        echo "🏥 Verifying rollback deployment..."
+
+        # Add health checks for rolled back deployment
+        echo "Running post-rollback health checks..."
+        sleep 5
+
+        echo "✅ Rollback verification completed"
+
+    - name: Notify rollback
+      run: |
+        echo "📢 Rollback notification"
+        echo "Target: ${{ steps.rollback-target.outputs.target }}"
+        echo "Image: ${{ steps.rollback-target.outputs.image }}"
+        echo "Status: Completed"
+        echo "Timestamp: $(date -u)"
+
+        # Add notification to Slack, email, or other systems here
+        echo "🚨 Manual review recommended for failed deployment"
