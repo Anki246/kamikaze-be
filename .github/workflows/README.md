@@ -1,248 +1,163 @@
-# Kamikaze AI - CI/CD Pipeline Documentation
+# Simplified CI/CD Pipeline
 
-This directory contains the complete CI/CD pipeline for the Kamikaze AI backend, including continuous integration, deployment, security scanning, and monitoring workflows.
+This directory contains the simplified CI/CD workflows for the Kamikaze AI Trading Bot.
 
-## 🚀 Pipeline Overview
+## Overview
 
-The CI/CD pipeline consists of multiple workflows:
+The pipeline consists of just **2 essential workflows**:
 
-### **Core Workflows**
-- **`ci.yml`** - Continuous Integration (code quality, testing, build validation)
-- **`deploy.yml`** - Continuous Deployment (zero-downtime deployment to AWS EC2)
-- **`security.yml`** - Security scanning (dependencies, code, containers, secrets)
-- **`monitoring.yml`** - Health monitoring and alerting
+### 1. CI Pipeline (`ci.yml`) - Continuous Integration
+**Triggers:** Push to `main`/`dev`/`develop`, Pull Requests
 
-### **Key Features**
-- **Zero-downtime deployment** with automatic rollback
-- **Comprehensive testing** with coverage reporting
-- **Multi-environment support** (production/staging)
-- **Security scanning** at multiple levels
-- **Real-time monitoring** and alerting
-- **Docker containerization** with vulnerability scanning
-- **AWS Secrets Manager integration**
+**What it does:**
+- ✅ **Code Quality Checks** - Black formatting, isort, Flake8 linting
+- ✅ **Security Scanning** - Bandit security analysis
+- ✅ **Testing** - Pytest with coverage reporting
+- ✅ **Docker Build** - Container image creation and testing
+- ✅ **Validation** - Configuration and project structure checks
 
-## 📋 Prerequisites
+**Jobs:**
+1. **Test** - Multi-Python version testing (3.11, 3.12)
+2. **Build** - Docker image creation and validation
+3. **Validate** - Final configuration and structure validation
 
-### 1. AWS Infrastructure Setup
+### 2. CD Pipeline (`cd.yml`) - Continuous Deployment
+**Triggers:** Successful CI on `main` or `dev` branch
 
-**EC2 Instance Requirements:**
-- Ubuntu 20.04+ or Amazon Linux 2
-- Docker installed and running
-- Python 3.11+ installed
-- Sufficient resources (minimum 2GB RAM, 2 vCPUs)
-- Security groups allowing inbound traffic on port 8000
+**What it does:**
+- 🚀 **Staging Deployment** - Automatic deployment to staging
+- 🧪 **Smoke Tests** - Basic functionality validation
+- 🏭 **Production Deployment** - Manual approval required
+- 📦 **Container Registry** - Push images to GitHub Container Registry
+- 🏷️ **Release Creation** - Automatic GitHub releases
+- 🔄 **Rollback** - Automatic rollback on failure
 
-**AWS Secrets Manager:**
-- `kmkz-db-secrets`: Database credentials
-- `kmkz-app-secrets`: Application secrets (Groq API key, etc.)
+**Jobs:**
+1. **Deploy Staging** - Automatic staging deployment
+2. **Deploy Production** - Manual production deployment (requires approval)
+3. **Rollback** - Automatic rollback on failure
 
-**IAM Permissions:**
-The deployment requires an IAM user/role with permissions for:
-- Secrets Manager read access
-- EC2 instance access (if using IAM roles)
+## Environment Configuration
 
-### 2. GitHub Repository Secrets
+### Staging Environment
+- **URL:** `https://staging.kamikaze-ai.com` (main) / `https://dev-staging.kamikaze-ai.com` (dev)
+- **Deployment:** Automatic on main or dev branch
+- **Approval:** Not required
+- **Testing:** Smoke tests included
 
-Configure the following secrets in your GitHub repository:
+### Production Environment
+- **URL:** `https://kamikaze-ai.com`
+- **Deployment:** Manual approval required
+- **Approval:** 1 reviewer, 5-minute wait timer
+- **Testing:** Full production validation
 
-#### Required Secrets
-```
-AWS_ACCESS_KEY_ID          # AWS access key for Secrets Manager
-AWS_SECRET_ACCESS_KEY      # AWS secret key for Secrets Manager
-AWS_REGION                 # AWS region (default: us-east-1)
-EC2_HOST                   # EC2 instance public IP or hostname
-EC2_USER                   # EC2 instance username (ubuntu/ec2-user)
-EC2_SSH_PRIVATE_KEY        # Private SSH key for EC2 access
-```
+## Required Setup
 
-#### Optional Secrets
-```
-SLACK_WEBHOOK_URL          # Slack webhook for deployment notifications
-```
+### 1. GitHub Secrets
+The pipeline uses minimal secrets:
+- `GITHUB_TOKEN` - Automatically provided by GitHub
 
-### 3. EC2 Instance Setup
+### 2. Environment Protection Rules
+Configure in GitHub repository settings:
+- **Staging:** No protection rules
+- **Production:** Require reviewers, deployment branch restrictions
 
-**Install Docker:**
+## Features
+
+### ✅ **Simplified Architecture**
+- Only 2 workflow files (vs 4+ in complex setups)
+- Clear separation of CI and CD concerns
+- Easy to understand and maintain
+
+### ✅ **Comprehensive Testing**
+- Multi-Python version support
+- Code quality enforcement
+- Security scanning included
+- Docker container testing
+
+### ✅ **Smart Deployment**
+- Staging-first deployment strategy
+- Manual production approval
+- Automatic rollback on failure
+- Container registry integration
+
+### ✅ **Built-in Safety**
+- Health checks at each stage
+- Smoke tests before production
+- Rollback capability
+- Environment isolation
+
+## Usage
+
+### For Developers
+1. **Create Pull Request** → CI pipeline runs automatically
+2. **Merge to dev** → CD pipeline deploys to dev-staging environment
+3. **Merge to main** → CD pipeline deploys to staging, then production (with approval)
+
+### For DevOps
+1. **Monitor CI results** in GitHub Actions tab
+2. **Approve production deployments** when ready
+3. **Check deployment status** in environments tab
+
+## Validation
+
+Run the validation script to ensure everything is set up correctly:
+
 ```bash
-# Ubuntu
-sudo apt update
-sudo apt install -y docker.io docker-compose
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker $USER
-
-# Amazon Linux 2
-sudo yum update -y
-sudo yum install -y docker
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker ec2-user
+./scripts/validate-simple-pipeline.sh
 ```
 
-**Create Application Directory:**
+This will check:
+- ✅ Workflow files exist and have valid syntax
+- ✅ Environment configurations are present
+- ✅ Project structure is correct
+- ✅ Basic tests can run
+
+## Benefits of Simplified Pipeline
+
+### 🎯 **Focused**
+- Only essential workflows
+- Clear responsibilities
+- Reduced complexity
+
+### 🚀 **Fast**
+- Streamlined processes
+- Parallel job execution
+- Efficient resource usage
+
+### 🔧 **Maintainable**
+- Easy to understand
+- Simple to modify
+- Clear documentation
+
+### 💰 **Cost-Effective**
+- Fewer workflow minutes used
+- Optimized resource allocation
+- Reduced maintenance overhead
+
+## Troubleshooting
+
+### CI Pipeline Issues
 ```bash
-sudo mkdir -p /opt/kamikaze-ai/{releases,shared/logs}
-sudo chown -R $USER:$USER /opt/kamikaze-ai
+# Fix code formatting
+black .
+isort .
+
+# Run tests locally
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
+pytest tests/test_basic.py -v
 ```
 
-**Install Required Tools:**
-```bash
-# Ubuntu
-sudo apt install -y curl jq
+### CD Pipeline Issues
+- Check environment protection rules in GitHub
+- Verify GITHUB_TOKEN permissions
+- Review deployment logs in Actions tab
 
-# Amazon Linux 2
-sudo yum install -y curl jq
-```
+## Next Steps
 
-## 🔧 Workflow Configuration
+1. **Configure environments** in GitHub repository settings
+2. **Set up protection rules** for production environment
+3. **Test the pipeline** with a pull request
+4. **Monitor first deployment** to ensure everything works
 
-### Trigger Events
-
-**Automatic Deployment:**
-- Push to `main` branch triggers production deployment
-
-**Manual Deployment:**
-- Use "Run workflow" button in GitHub Actions
-- Select environment (production/staging)
-
-### Environment Variables
-
-The workflow uses these environment variables:
-- `APPLICATION_NAME`: kamikaze-ai
-- `DOCKER_IMAGE_NAME`: kamikaze-ai-backend
-- `HEALTH_CHECK_URL`: http://localhost:8000/health
-- `DEPLOYMENT_TIMEOUT`: 300 seconds
-
-## 📊 Deployment Process
-
-### 1. Build Stage
-- ✅ Checkout code and setup Python 3.11
-- ✅ Install dependencies and run syntax checks
-- ✅ Validate configuration files
-- ✅ Build and test Docker image
-- ✅ Upload Docker image as artifact
-
-### 2. Deploy Stage
-- ✅ Download Docker image artifact
-- ✅ Configure AWS credentials
-- ✅ Setup SSH connection to EC2
-- ✅ Upload application files and Docker image
-- ✅ Execute zero-downtime deployment script
-- ✅ Verify deployment with health checks
-- ✅ Update system services (nginx, systemd)
-- ✅ Clean up old releases and Docker images
-
-### 3. Cleanup Stage
-- ✅ Remove temporary artifacts
-- ✅ Send deployment notifications
-
-## 🛡️ Security Features
-
-### SSH Security
-- Uses SSH key authentication
-- Automatically adds EC2 host to known_hosts
-- Secure file permissions (600) for private keys
-
-### AWS Security
-- Uses IAM credentials for AWS access
-- Secrets stored in GitHub repository secrets
-- AWS Secrets Manager for application secrets
-
-### Container Security
-- Non-root user in Docker container
-- Resource limits and logging configuration
-- Automatic restart policies
-
-## 🔄 Zero-Downtime Deployment
-
-The deployment process ensures zero downtime:
-
-1. **Health Check**: Verify current service is healthy
-2. **Backup**: Create backup of current deployment
-3. **Deploy**: Start new container alongside existing one
-4. **Verify**: Health check new container for 5 minutes
-5. **Switch**: Replace old container with new one
-6. **Cleanup**: Remove old container and releases
-
-### Rollback Process
-
-If deployment fails:
-1. Stop new container
-2. Restore backup deployment
-3. Restart old container
-4. Log failure details
-5. Exit with error code
-
-## 📝 Monitoring and Logging
-
-### Health Checks
-- Container status verification
-- HTTP health endpoint check
-- API functionality verification
-
-### Logging
-- Docker container logs with rotation
-- Application logs in `/opt/kamikaze-ai/shared/logs`
-- GitHub Actions workflow logs
-
-### Notifications
-- Deployment status notifications
-- Slack integration (optional)
-- GitHub commit status updates
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**SSH Connection Failed:**
-```bash
-# Check SSH key format
-ssh-keygen -l -f ~/.ssh/id_rsa
-
-# Test SSH connection
-ssh -i ~/.ssh/id_rsa user@host
-```
-
-**Docker Permission Denied:**
-```bash
-# Add user to docker group
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-**Health Check Failed:**
-```bash
-# Check container logs
-docker logs kamikaze-ai-backend
-
-# Check application logs
-tail -f /opt/kamikaze-ai/shared/logs/system/*.log
-```
-
-**AWS Secrets Access Denied:**
-```bash
-# Test AWS credentials
-aws secretsmanager get-secret-value --secret-id kmkz-db-secrets
-```
-
-### Manual Rollback
-
-If automatic rollback fails:
-```bash
-# Stop current container
-docker stop kamikaze-ai-backend
-
-# List available releases
-ls -la /opt/kamikaze-ai/releases/
-
-# Rollback to previous release
-cd /opt/kamikaze-ai/releases/PREVIOUS_SHA
-./deploy.sh
-```
-
-## 📚 Additional Resources
-
-- [AWS Secrets Manager Documentation](https://docs.aws.amazon.com/secretsmanager/)
-- [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [Docker Documentation](https://docs.docker.com/)
-- [Kamikaze AI Backend Documentation](../../README.md)
+The simplified pipeline provides all essential CI/CD functionality while being easy to understand and maintain!
