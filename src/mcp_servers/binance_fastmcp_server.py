@@ -85,6 +85,7 @@ except ImportError:
     def get_env_value(key: str, default: Any = None) -> Any:
         return os.getenv(key, default)
 
+
 # Configure logging to stderr (stdout reserved for MCP protocol)
 logging.basicConfig(
     level=logging.INFO,
@@ -293,7 +294,9 @@ async def make_binance_request(
     try:
         # Create proper SSL context with certificate verification
         # Check if SSL verification should be disabled (for development/testing)
-        disable_ssl = get_env_value("DISABLE_SSL_VERIFICATION", "false").lower() == "true"
+        disable_ssl = (
+            get_env_value("DISABLE_SSL_VERIFICATION", "false").lower() == "true"
+        )
 
         if disable_ssl:
             logger.warning(
@@ -815,12 +818,16 @@ async def calculate_technical_indicators(
                         macd, macd_signal, macd_hist = talib.MACD(closes)
                         indicators["MACD"] = {
                             "macd": float(macd[-1]) if not np.isnan(macd[-1]) else 0,
-                            "signal": float(macd_signal[-1])
-                            if not np.isnan(macd_signal[-1])
-                            else 0,
-                            "histogram": float(macd_hist[-1])
-                            if not np.isnan(macd_hist[-1])
-                            else 0,
+                            "signal": (
+                                float(macd_signal[-1])
+                                if not np.isnan(macd_signal[-1])
+                                else 0
+                            ),
+                            "histogram": (
+                                float(macd_hist[-1])
+                                if not np.isnan(macd_hist[-1])
+                                else 0
+                            ),
                         }
                     else:
                         # Simple MACD calculation
@@ -837,15 +844,17 @@ async def calculate_technical_indicators(
                     if TALIB_AVAILABLE:
                         bb_upper, bb_middle, bb_lower = talib.BBANDS(closes)
                         indicators["BB"] = {
-                            "upper": float(bb_upper[-1])
-                            if not np.isnan(bb_upper[-1])
-                            else 0,
-                            "middle": float(bb_middle[-1])
-                            if not np.isnan(bb_middle[-1])
-                            else 0,
-                            "lower": float(bb_lower[-1])
-                            if not np.isnan(bb_lower[-1])
-                            else 0,
+                            "upper": (
+                                float(bb_upper[-1]) if not np.isnan(bb_upper[-1]) else 0
+                            ),
+                            "middle": (
+                                float(bb_middle[-1])
+                                if not np.isnan(bb_middle[-1])
+                                else 0
+                            ),
+                            "lower": (
+                                float(bb_lower[-1]) if not np.isnan(bb_lower[-1]) else 0
+                            ),
                         }
                     else:
                         # Manual Bollinger Bands
@@ -1138,9 +1147,7 @@ async def assess_market_sentiment(input: MarketSentimentInput) -> Dict[str, Any]
         volume_strength = (
             "HIGH"
             if volume_24h > 1000000
-            else "MEDIUM"
-            if volume_24h > 100000
-            else "LOW"
+            else "MEDIUM" if volume_24h > 100000 else "LOW"
         )
 
         # Overall sentiment
@@ -1267,9 +1274,9 @@ async def get_multi_timeframe_data(input: MultiTimeframeInput) -> Dict[str, Any]
             "symbol": input.symbol,
             "timeframes": multi_tf_data,
             "overall_trend": overall_trend,
-            "trend_strength": max(uptrend_count, downtrend_count) / len(trends)
-            if trends
-            else 0,
+            "trend_strength": (
+                max(uptrend_count, downtrend_count) / len(trends) if trends else 0
+            ),
         }
 
     except Exception as e:

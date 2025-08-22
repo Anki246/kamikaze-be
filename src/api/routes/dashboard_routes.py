@@ -570,9 +570,11 @@ async def get_test_dashboard_overview():
             TopAsset(
                 symbol=allocation["asset"],
                 name=allocation["asset"],
-                price=allocation["usd_value"] / allocation["balance"]
-                if allocation["balance"] > 0
-                else 0.0,
+                price=(
+                    allocation["usd_value"] / allocation["balance"]
+                    if allocation["balance"] > 0
+                    else 0.0
+                ),
                 change_percent=2.5,  # Mock change
             )
             for allocation in portfolio_data["asset_allocation"][:5]
@@ -745,9 +747,11 @@ async def debug_portfolio_data(
         credentials_info = {
             "has_credentials": credentials is not None,
             "is_testnet": credentials.get("is_testnet", None) if credentials else None,
-            "api_key_prefix": credentials.get("api_key", "")[:8] + "..."
-            if credentials and credentials.get("api_key")
-            else None,
+            "api_key_prefix": (
+                credentials.get("api_key", "")[:8] + "..."
+                if credentials and credentials.get("api_key")
+                else None
+            ),
         }
 
         # Get raw account balances for debugging
@@ -910,12 +914,14 @@ async def debug_futures_data(current_user: Dict[str, Any] = Depends(get_current_
             "futures_account": futures_data,
             "credentials_info": {
                 "has_credentials": credentials is not None,
-                "is_testnet": credentials.get("is_testnet", None)
-                if credentials
-                else None,
-                "api_key_prefix": credentials.get("api_key", "")[:8] + "..."
-                if credentials and credentials.get("api_key")
-                else None,
+                "is_testnet": (
+                    credentials.get("is_testnet", None) if credentials else None
+                ),
+                "api_key_prefix": (
+                    credentials.get("api_key", "")[:8] + "..."
+                    if credentials and credentials.get("api_key")
+                    else None
+                ),
             },
         }
 

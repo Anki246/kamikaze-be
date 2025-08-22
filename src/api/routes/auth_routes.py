@@ -169,14 +169,16 @@ async def get_current_user(
             result = await conn.fetchrow(session_query, token, int(user_id))
 
         if not result:
-            logger.warning(f"Token not found in database or expired for user ID: {user_id}")
+            logger.warning(
+                f"Token not found in database or expired for user ID: {user_id}"
+            )
             raise HTTPException(status_code=401, detail="Token not found or expired")
 
         # Update last activity
         async with auth_db.get_connection() as conn:
             await conn.execute(
                 "UPDATE user_sessions SET last_activity = NOW() WHERE access_token = $1",
-                token
+                token,
             )
 
         # Convert to dict and handle datetime serialization
@@ -196,14 +198,22 @@ async def get_current_user(
             "avatar_url": result["avatar_url"],
             "bio": result["bio"],
             "timezone": result["timezone"],
-            "created_at": result["created_at"].isoformat() if result["created_at"] else None,
-            "updated_at": result["updated_at"].isoformat() if result["updated_at"] else None,
-            "last_login": result["last_login"].isoformat() if result["last_login"] else None,
+            "created_at": (
+                result["created_at"].isoformat() if result["created_at"] else None
+            ),
+            "updated_at": (
+                result["updated_at"].isoformat() if result["updated_at"] else None
+            ),
+            "last_login": (
+                result["last_login"].isoformat() if result["last_login"] else None
+            ),
             "rate_limit_override": result["rate_limit_override"],
-            "phone_number": result["phone_number"]
+            "phone_number": result["phone_number"],
         }
 
-        logger.debug(f"Successfully authenticated user: {user_dict.get('email', 'unknown')}")
+        logger.debug(
+            f"Successfully authenticated user: {user_dict.get('email', 'unknown')}"
+        )
         return user_dict
 
     except HTTPException:

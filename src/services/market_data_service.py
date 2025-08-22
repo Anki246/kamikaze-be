@@ -155,7 +155,9 @@ class MarketDataService:
                             self.error_count += 1
 
                             if self.error_count > self.max_errors:
-                                self.logger.error("❌ Too many errors, stopping service")
+                                self.logger.error(
+                                    "❌ Too many errors, stopping service"
+                                )
                                 self.running = False
                                 break
 

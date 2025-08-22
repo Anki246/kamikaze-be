@@ -226,9 +226,11 @@ class AgentManager:
                         configuration=AgentConfiguration(),  # Load from agent config
                         performance=AgentPerformanceMetrics(),  # Load from agent metrics
                         runtime=AgentRuntimeData(
-                            uptime=agent.get_uptime()
-                            if hasattr(agent, "get_uptime")
-                            else None,
+                            uptime=(
+                                agent.get_uptime()
+                                if hasattr(agent, "get_uptime")
+                                else None
+                            ),
                             mcp_connected=self._check_agent_mcp_connection(agent),
                             binance_connected=self._check_agent_binance_connection(
                                 agent
@@ -366,7 +368,9 @@ class AgentManager:
             # Start trading
             success = await agent.start_trading()
             if success:
-                self.logger.info(f"✅ Agent {agent_id} created and started successfully")
+                self.logger.info(
+                    f"✅ Agent {agent_id} created and started successfully"
+                )
                 return {"message": "Agent created and started", "status": "running"}
             else:
                 raise Exception("Failed to start agent after creation")
@@ -407,9 +411,9 @@ class AgentManager:
                 agent_id=agent_id,
                 status=agent.status.value,
                 is_running=agent.status == AgentStatus.RUNNING,
-                uptime_seconds=agent.get_uptime()
-                if hasattr(agent, "get_uptime")
-                else 0,
+                uptime_seconds=(
+                    agent.get_uptime() if hasattr(agent, "get_uptime") else 0
+                ),
                 current_cycle=getattr(agent, "current_cycle", 0),
                 max_cycles=getattr(agent, "max_cycles", 100),
                 last_activity=getattr(agent, "last_activity", None)

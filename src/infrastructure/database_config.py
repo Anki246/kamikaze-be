@@ -12,17 +12,21 @@ from typing import Any, Optional
 
 # Load configuration from centralized system
 try:
-    from .config_loader import initialize_config, get_config_value
+    from .config_loader import get_config_value, initialize_config
 
     initialize_config()
 
     # Use centralized configuration function
-    def get_db_config_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+    def get_db_config_value(
+        key: str, default: Any = None, type_func: callable = str
+    ) -> Any:
         return get_config_value(key, default, type_func)
 
 except ImportError:
     # Fallback function for direct environment variable access
-    def get_db_config_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+    def get_db_config_value(
+        key: str, default: Any = None, type_func: callable = str
+    ) -> Any:
         value = os.getenv(key, default)
         if value is None or value == default:
             return default
@@ -32,6 +36,7 @@ except ImportError:
             return type_func(value)
         except (ValueError, TypeError):
             return default
+
 
 # Import AWS Secrets Manager integration
 try:
@@ -76,7 +81,9 @@ class DatabaseConfig:
                 )
 
         # PRIORITY 2: Fallback to localhost database with environment variables
-        logger.info("🔧 Priority 2: Loading localhost database configuration from environment variables")
+        logger.info(
+            "🔧 Priority 2: Loading localhost database configuration from environment variables"
+        )
         self._load_from_environment()
 
     def _should_use_aws_secrets(self) -> bool:
@@ -90,6 +97,7 @@ class DatabaseConfig:
         try:
             import asyncio
             import concurrent.futures
+
             secrets_manager = AWSSecretsManager()
 
             # Use thread pool to run async function
@@ -105,7 +113,9 @@ class DatabaseConfig:
                 self.password = db_credentials.password
                 self.ssl_mode = db_credentials.ssl_mode
 
-                logger.info(f"✅ Loaded AWS RDS config: {self.host}:{self.port}/{self.database}")
+                logger.info(
+                    f"✅ Loaded AWS RDS config: {self.host}:{self.port}/{self.database}"
+                )
                 return True
         except Exception as e:
             logger.error(f"❌ Error loading from AWS Secrets Manager: {e}")
@@ -115,6 +125,7 @@ class DatabaseConfig:
     def _run_async_secrets_fetch(self, secrets_manager):
         """Run async secrets fetch in a new event loop."""
         import asyncio
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -125,11 +136,21 @@ class DatabaseConfig:
     def _load_from_environment(self):
         """Load configuration from centralized configuration system."""
         # Use DB_ prefix for consistency with FastMCP server
-        self.host = get_db_config_value("DB_HOST") or get_db_config_value("POSTGRES_HOST", self.host)
-        self.port = get_db_config_value("DB_PORT", None, int) or get_db_config_value("POSTGRES_PORT", self.port, int)
-        self.database = get_db_config_value("DB_NAME") or get_db_config_value("POSTGRES_DATABASE", self.database)
-        self.user = get_db_config_value("DB_USER") or get_db_config_value("POSTGRES_USER", self.user)
-        self.password = get_db_config_value("DB_PASSWORD") or get_db_config_value("POSTGRES_PASSWORD", self.password)
+        self.host = get_db_config_value("DB_HOST") or get_db_config_value(
+            "POSTGRES_HOST", self.host
+        )
+        self.port = get_db_config_value("DB_PORT", None, int) or get_db_config_value(
+            "POSTGRES_PORT", self.port, int
+        )
+        self.database = get_db_config_value("DB_NAME") or get_db_config_value(
+            "POSTGRES_DATABASE", self.database
+        )
+        self.user = get_db_config_value("DB_USER") or get_db_config_value(
+            "POSTGRES_USER", self.user
+        )
+        self.password = get_db_config_value("DB_PASSWORD") or get_db_config_value(
+            "POSTGRES_PASSWORD", self.password
+        )
 
         # Configure SSL for RDS connections
         if self.host and ".rds.amazonaws.com" in self.host:
@@ -137,21 +158,17 @@ class DatabaseConfig:
             logger.info(f"🔐 Detected RDS host, enabling SSL: {self.host}")
         elif self.host != "localhost":
             self.ssl_mode = "prefer"
-        self.min_pool_size = (
-            get_db_config_value("DB_MIN_SIZE", None, int) or
-            get_db_config_value("POSTGRES_MIN_POOL_SIZE", self.min_pool_size, int)
-        )
-        self.max_pool_size = (
-            get_db_config_value("DB_MAX_SIZE", None, int) or
-            get_db_config_value("POSTGRES_MAX_POOL_SIZE", self.max_pool_size, int)
-        )
-        self.command_timeout = (
-            get_db_config_value("DB_TIMEOUT", None, int) or
-            get_db_config_value("POSTGRES_COMMAND_TIMEOUT", self.command_timeout, int)
-        )
-        self.ssl_mode = (
-            get_db_config_value("DB_SSL_MODE") or
-            get_db_config_value("POSTGRES_SSL_MODE", self.ssl_mode)
+        self.min_pool_size = get_db_config_value(
+            "DB_MIN_SIZE", None, int
+        ) or get_db_config_value("POSTGRES_MIN_POOL_SIZE", self.min_pool_size, int)
+        self.max_pool_size = get_db_config_value(
+            "DB_MAX_SIZE", None, int
+        ) or get_db_config_value("POSTGRES_MAX_POOL_SIZE", self.max_pool_size, int)
+        self.command_timeout = get_db_config_value(
+            "DB_TIMEOUT", None, int
+        ) or get_db_config_value("POSTGRES_COMMAND_TIMEOUT", self.command_timeout, int)
+        self.ssl_mode = get_db_config_value("DB_SSL_MODE") or get_db_config_value(
+            "POSTGRES_SSL_MODE", self.ssl_mode
         )
 
         # Handle password for localhost vs production
@@ -160,7 +177,9 @@ class DatabaseConfig:
         if not self.password:
             if self.host == "localhost":
                 # For localhost, use the known password for development
-                logger.info("🔧 Localhost database detected - using development password")
+                logger.info(
+                    "🔧 Localhost database detected - using development password"
+                )
                 self.password = "admin2025"  # Known localhost password
             elif environment == "production":
                 raise ValueError(
@@ -180,7 +199,10 @@ class DatabaseConfig:
         if self.host == "localhost":
             try:
                 import getpass
-                password = getpass.getpass(f"🔐 Enter password for PostgreSQL user '{self.user}' on localhost: ")
+
+                password = getpass.getpass(
+                    f"🔐 Enter password for PostgreSQL user '{self.user}' on localhost: "
+                )
                 return password
             except (ImportError, KeyboardInterrupt):
                 logger.warning("⚠️ Password prompt failed, using empty password")

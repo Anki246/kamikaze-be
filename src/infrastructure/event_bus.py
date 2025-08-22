@@ -281,7 +281,9 @@ class EventBus:
                                 try:
                                     await callback(event)
                                 except Exception as e:
-                                    self.logger.error(f"❌ Error in event callback: {e}")
+                                    self.logger.error(
+                                        f"❌ Error in event callback: {e}"
+                                    )
 
                     except Exception as e:
                         self.logger.error(f"❌ Error processing event: {e}")

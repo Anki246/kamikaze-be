@@ -35,18 +35,34 @@ class FluxTraderConfigManager:
         # Validate API configuration
         print("\n🔑 API Configuration:")
         if not config.api.binance_api_key:
-            warnings.append("Binance API key not in environment variables (will retrieve from database)")
-            print("ℹ️ Binance API Key: Not in environment (database retrieval available)")
+            warnings.append(
+                "Binance API key not in environment variables (will retrieve from database)"
+            )
+            print(
+                "ℹ️ Binance API Key: Not in environment (database retrieval available)"
+            )
         else:
-            warnings.append("Binance API key found in environment variables (consider using database)")
-            print("⚠️ Binance API Key: Configured in environment (consider database storage)")
+            warnings.append(
+                "Binance API key found in environment variables (consider using database)"
+            )
+            print(
+                "⚠️ Binance API Key: Configured in environment (consider database storage)"
+            )
 
         if not config.api.binance_secret_key:
-            warnings.append("Binance secret key not in environment variables (will retrieve from database)")
-            print("ℹ️ Binance Secret Key: Not in environment (database retrieval available)")
+            warnings.append(
+                "Binance secret key not in environment variables (will retrieve from database)"
+            )
+            print(
+                "ℹ️ Binance Secret Key: Not in environment (database retrieval available)"
+            )
         else:
-            warnings.append("Binance secret key found in environment variables (consider using database)")
-            print("⚠️ Binance Secret Key: Configured in environment (consider database storage)")
+            warnings.append(
+                "Binance secret key found in environment variables (consider using database)"
+            )
+            print(
+                "⚠️ Binance Secret Key: Configured in environment (consider database storage)"
+            )
 
         if not config.api.groq_api_key:
             warnings.append("Missing Groq API key - AI features will be disabled")
@@ -128,7 +144,9 @@ class FluxTraderConfigManager:
         print(
             f"   Binance Secret: {'✅ Set' if config.api.binance_secret_key else '❌ Not set'}"
         )
-        print(f"   Groq API Key: {'✅ Set' if config.api.groq_api_key else '❌ Not set'}")
+        print(
+            f"   Groq API Key: {'✅ Set' if config.api.groq_api_key else '❌ Not set'}"
+        )
 
         # Trading Settings
         print("\n💰 Trading Settings:")

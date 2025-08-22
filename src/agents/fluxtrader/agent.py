@@ -29,14 +29,6 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-# Import base agent and multi-agent system components
-from ..base_agent import AgentMetadata, AgentStatus, BaseAgent, StrategyType
-
-# Import FluxTrader-specific configuration
-from .config import config
-
-# Import FastMCP client for enhanced MCP integration
-from .fastmcp_client import FluxTraderMCPClient, create_binance_client
 from shared.constants import API_ENDPOINTS, DEFAULT_CONFIG, TRADING_PAIRS
 from shared.logging_config import setup_logging
 from shared.utils import (
@@ -46,6 +38,15 @@ from shared.utils import (
     get_timestamp,
     validate_trading_pair,
 )
+
+# Import base agent and multi-agent system components
+from ..base_agent import AgentMetadata, AgentStatus, BaseAgent, StrategyType
+
+# Import FluxTrader-specific configuration
+from .config import config
+
+# Import FastMCP client for enhanced MCP integration
+from .fastmcp_client import FluxTraderMCPClient, create_binance_client
 
 # Add src directory to path if not already there
 src_path = Path(__file__).parent.parent.parent
@@ -87,14 +88,22 @@ class BinanceToolsInterface:
         self.server_info = {}
 
         # Initialize enhanced logging
-        self.logger.info("🔧 Initializing Enhanced Binance Tools Interface with FastMCP")
+        self.logger.info(
+            "🔧 Initializing Enhanced Binance Tools Interface with FastMCP"
+        )
 
         # Log credential status
         if not self.api_key or not self.secret_key:
-            self.logger.warning("⚠️ Binance credentials not provided - will retrieve from database when needed")
-            self.logger.info("ℹ️ Trading functionality will be limited until credentials are available")
+            self.logger.warning(
+                "⚠️ Binance credentials not provided - will retrieve from database when needed"
+            )
+            self.logger.info(
+                "ℹ️ Trading functionality will be limited until credentials are available"
+            )
         else:
-            self.logger.info("✅ Binance credentials provided via parameters or environment")
+            self.logger.info(
+                "✅ Binance credentials provided via parameters or environment"
+            )
 
     def _generate_signature(self, query_string: str) -> str:
         """Generate HMAC SHA256 signature for Binance API."""
@@ -968,9 +977,7 @@ class FluxTraderAgent(BaseAgent):
             volatility_level = (
                 "HIGH"
                 if abs(price_change_pct) > 2.0
-                else "MEDIUM"
-                if abs(price_change_pct) > 0.5
-                else "LOW"
+                else "MEDIUM" if abs(price_change_pct) > 0.5 else "LOW"
             )
 
             # Position relative to support/resistance
@@ -1366,9 +1373,7 @@ class FluxTraderAgent(BaseAgent):
                 status = (
                     "OVERBOUGHT"
                     if overbought
-                    else "OVERSOLD"
-                    if oversold
-                    else "NEUTRAL"
+                    else "OVERSOLD" if oversold else "NEUTRAL"
                 )
                 summary += f"  RSI: {current_rsi:.1f} ({status}, Signal: {signal})\n"
 
@@ -1382,9 +1387,7 @@ class FluxTraderAgent(BaseAgent):
                 crossover = (
                     "BULLISH CROSSOVER"
                     if bullish
-                    else "BEARISH CROSSOVER"
-                    if bearish
-                    else "NO CROSSOVER"
+                    else "BEARISH CROSSOVER" if bearish else "NO CROSSOVER"
                 )
                 summary += f"  MACD: {signal_type} ({crossover})\n"
 
@@ -1398,9 +1401,7 @@ class FluxTraderAgent(BaseAgent):
                 position_desc = (
                     "UPPER"
                     if bb_position > 0.8
-                    else "LOWER"
-                    if bb_position < 0.2
-                    else "MIDDLE"
+                    else "LOWER" if bb_position < 0.2 else "MIDDLE"
                 )
                 squeeze_desc = " (SQUEEZE)" if squeeze else ""
                 summary += f"  Bollinger Bands: {signal} (Position: {position_desc}{squeeze_desc})\n"
@@ -1629,9 +1630,7 @@ class FluxTraderAgent(BaseAgent):
                 self.logger.error(
                     f"   💰 Available Balance: ${self.available_balance:.2f} USDT"
                 )
-                self.logger.error(
-                    f"   🛡️  Required Margin: ${required_margin:.2f} USDT"
-                )
+                self.logger.error(f"   🛡️  Required Margin: ${required_margin:.2f} USDT")
                 self.logger.error(
                     f"   💸 Shortfall: ${required_margin - self.available_balance:.2f} USDT"
                 )
@@ -1761,9 +1760,11 @@ class FluxTraderAgent(BaseAgent):
                     "quantity": quantity,
                     "price": current_price,
                     "order_type": "MARKET",
-                    "status": "FILLED"
-                    if order_result.get("status") == "FILLED"
-                    else "PENDING",
+                    "status": (
+                        "FILLED"
+                        if order_result.get("status") == "FILLED"
+                        else "PENDING"
+                    ),
                     "filled_quantity": float(order_result.get("executedQty", 0)),
                     "average_price": float(order_result.get("avgPrice", current_price)),
                     "order_id": str(order_result.get("orderId", "")),
@@ -2095,7 +2096,9 @@ class FluxTraderAgent(BaseAgent):
                                 low_24h = current_price * 0.999
 
                         except (ValueError, TypeError) as e:
-                            error_msg = f"❌ Error parsing ticker data for {symbol}: {e}"
+                            error_msg = (
+                                f"❌ Error parsing ticker data for {symbol}: {e}"
+                            )
                             print(f"   {error_msg}")
                             self.logger.warning(error_msg)
                             continue
@@ -2364,13 +2367,13 @@ class FluxTraderAgent(BaseAgent):
                                 print(f"")
                                 print(f"🧠 AI AGENT PROFILE:")
                                 print(f"   🎯 Agent Type: FluxTrader AI Trading Agent")
-                                print(f"   🔬 Analysis Model: Groq LLM (llama3-8b-8192)")
+                                print(
+                                    f"   🔬 Analysis Model: Groq LLM (llama3-8b-8192)"
+                                )
                                 print(
                                     f"   📊 Decision Framework: Multi-Factor Holistic Analysis"
                                 )
-                                print(
-                                    f"   🎛️  Temperature: 0.1 (Conservative, Precise)"
-                                )
+                                print(f"   🎛️  Temperature: 0.1 (Conservative, Precise)")
                                 print(f"   📝 Max Tokens: 400 (Detailed Analysis)")
                                 print(
                                     f"   🔄 Processing Mode: Real-time Market Analysis"
@@ -2410,7 +2413,9 @@ class FluxTraderAgent(BaseAgent):
                                 print(f"   ✅ Micro-Trend: {trend_direction}")
                                 print(f"")
                                 print(f"🤖 AI DECISION OUTPUT:")
-                                print(f"   🎯 AI Decision: {ai_analysis['ai_decision']}")
+                                print(
+                                    f"   🎯 AI Decision: {ai_analysis['ai_decision']}"
+                                )
                                 print(
                                     f"   🔥 AI Confidence: {ai_analysis['ai_confidence'] * 100:.1f}%"
                                 )
@@ -2558,13 +2563,13 @@ class FluxTraderAgent(BaseAgent):
                                 print(f"")
                                 print(f"🧠 AI AGENT PROFILE:")
                                 print(f"   🎯 Agent Type: FluxTrader AI Trading Agent")
-                                print(f"   🔬 Analysis Model: Groq LLM (llama3-8b-8192)")
+                                print(
+                                    f"   🔬 Analysis Model: Groq LLM (llama3-8b-8192)"
+                                )
                                 print(
                                     f"   📊 Decision Framework: Multi-Factor Holistic Analysis"
                                 )
-                                print(
-                                    f"   🎛️  Temperature: 0.1 (Conservative, Precise)"
-                                )
+                                print(f"   🎛️  Temperature: 0.1 (Conservative, Precise)")
                                 print(f"   📝 Max Tokens: 400 (Detailed Analysis)")
                                 print(
                                     f"   🔄 Processing Mode: Real-time Market Analysis"
@@ -2604,7 +2609,9 @@ class FluxTraderAgent(BaseAgent):
                                 print(f"   ✅ Micro-Trend: {trend_direction}")
                                 print(f"")
                                 print(f"🤖 AI DECISION OUTPUT:")
-                                print(f"   🎯 AI Decision: {ai_analysis['ai_decision']}")
+                                print(
+                                    f"   🎯 AI Decision: {ai_analysis['ai_decision']}"
+                                )
                                 print(
                                     f"   🔥 AI Confidence: {ai_analysis['ai_confidence'] * 100:.1f}%"
                                 )
@@ -2782,46 +2789,52 @@ class FluxTraderAgent(BaseAgent):
                             "total_pairs_analyzed": len(cycle_pairs_data),
                             "signals_found": signals_found,
                             "cycle_duration": (
-                                cycle_end_time - datetime.now()
-                            ).total_seconds()
-                            if hasattr(self, "cycle_start_time")
-                            else 0,
-                            "average_price_change": sum(
-                                [pair.get("change_pct", 0) for pair in cycle_pairs_data]
-                            )
-                            / len(cycle_pairs_data)
-                            if cycle_pairs_data
-                            else 0,
-                            "highest_volume_pair": max(
-                                cycle_pairs_data, key=lambda x: x.get("volume", 0)
-                            )
-                            if cycle_pairs_data
-                            else None,
-                            "most_volatile_pair": max(
-                                cycle_pairs_data,
-                                key=lambda x: abs(x.get("change_pct", 0)),
-                            )
-                            if cycle_pairs_data
-                            else None,
+                                (cycle_end_time - datetime.now()).total_seconds()
+                                if hasattr(self, "cycle_start_time")
+                                else 0
+                            ),
+                            "average_price_change": (
+                                sum(
+                                    [
+                                        pair.get("change_pct", 0)
+                                        for pair in cycle_pairs_data
+                                    ]
+                                )
+                                / len(cycle_pairs_data)
+                                if cycle_pairs_data
+                                else 0
+                            ),
+                            "highest_volume_pair": (
+                                max(cycle_pairs_data, key=lambda x: x.get("volume", 0))
+                                if cycle_pairs_data
+                                else None
+                            ),
+                            "most_volatile_pair": (
+                                max(
+                                    cycle_pairs_data,
+                                    key=lambda x: abs(x.get("change_pct", 0)),
+                                )
+                                if cycle_pairs_data
+                                else None
+                            ),
                         },
                         "performance_metrics": {
                             "current_balance": self.available_balance,
                             "signals_detection_rate": (
-                                signals_found / len(cycle_pairs_data)
-                            )
-                            * 100
-                            if cycle_pairs_data
-                            else 0,
+                                (signals_found / len(cycle_pairs_data)) * 100
+                                if cycle_pairs_data
+                                else 0
+                            ),
                             "cycle_efficiency": signals_found
                             / max(1, len(self.trading_pairs))
                             * 100,
                         },
                         "analysis_summary": f"Cycle {cycle + 1} analysis complete. Analyzed {len(cycle_pairs_data)} pairs, detected {signals_found} trading signals. Current balance: ${self.available_balance:.2f}",
                         "next_cycle_eta": (
-                            datetime.now() + timedelta(seconds=30)
-                        ).isoformat()
-                        if cycle + 1 < self.max_cycles
-                        else None,
+                            (datetime.now() + timedelta(seconds=30)).isoformat()
+                            if cycle + 1 < self.max_cycles
+                            else None
+                        ),
                     }
                 )
 
@@ -2920,8 +2933,12 @@ class FluxTraderAgent(BaseAgent):
                 )
 
                 if not balance_result.get("success", False):
-                    self.logger.warning("Could not connect to Binance API - credentials may not be configured")
-                    self.logger.info("Agent will run in limited mode without trading functionality")
+                    self.logger.warning(
+                        "Could not connect to Binance API - credentials may not be configured"
+                    )
+                    self.logger.info(
+                        "Agent will run in limited mode without trading functionality"
+                    )
                     # Don't set error status - allow agent to run without trading
                 else:
                     self.logger.info("✅ Binance API connection successful")

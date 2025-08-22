@@ -391,7 +391,9 @@ class CredentialsDatabase:
                 return None
 
         except Exception as e:
-            logger.error(f"❌ Failed to get Binance credentials for user {user_id}: {e}")
+            logger.error(
+                f"❌ Failed to get Binance credentials for user {user_id}: {e}"
+            )
             return None
 
     async def get_user_binance_credentials(self, user_id: int) -> Dict[str, Any]:

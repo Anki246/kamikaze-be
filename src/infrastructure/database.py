@@ -12,17 +12,21 @@ import psycopg2.pool
 
 # Load configuration from centralized system
 try:
-    from .config_loader import initialize_config, get_config_value
+    from .config_loader import get_config_value, initialize_config
 
     initialize_config()
 
     # Use centralized configuration function
-    def get_db_env_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+    def get_db_env_value(
+        key: str, default: Any = None, type_func: callable = str
+    ) -> Any:
         return get_config_value(key, default, type_func)
 
 except ImportError:
     # Fallback function for direct environment variable access
-    def get_db_env_value(key: str, default: Any = None, type_func: callable = str) -> Any:
+    def get_db_env_value(
+        key: str, default: Any = None, type_func: callable = str
+    ) -> Any:
         value = os.getenv(key, default)
         if value is None or value == default:
             return default
@@ -32,6 +36,7 @@ except ImportError:
             return type_func(value)
         except (ValueError, TypeError):
             return default
+
 
 logger = logging.getLogger(__name__)
 

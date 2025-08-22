@@ -165,9 +165,11 @@ async def websocket_main_endpoint(
                     # Send current status
                     status = {
                         "type": "status",
-                        "connected_clients": len(websocket_manager.connections)
-                        if websocket_manager
-                        else 0,
+                        "connected_clients": (
+                            len(websocket_manager.connections)
+                            if websocket_manager
+                            else 0
+                        ),
                         "client_id": authenticated_client_id,
                         "user_id": user["id"],
                     }
@@ -257,9 +259,11 @@ async def websocket_endpoint(
                     # Send current status
                     status = {
                         "type": "status",
-                        "connected_clients": len(websocket_manager.connections)
-                        if websocket_manager
-                        else 0,
+                        "connected_clients": (
+                            len(websocket_manager.connections)
+                            if websocket_manager
+                            else 0
+                        ),
                         "client_id": authenticated_client_id,
                         "user_id": user["id"],
                     }

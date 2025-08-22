@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, Union
 
 # Load configuration from AWS Secrets Manager
 try:
-    from ...infrastructure.config_loader import initialize_config, get_config_value
+    from ...infrastructure.config_loader import get_config_value, initialize_config
 
     initialize_config()
     print("✅ Configuration initialized successfully")
@@ -22,7 +22,9 @@ try:
         return get_config_value(key, default, type_func)
 
 except ImportError:
-    print("⚠️ Centralized configuration not available - using system environment variables")
+    print(
+        "⚠️ Centralized configuration not available - using system environment variables"
+    )
 
     # Fallback to direct environment variable access
     def get_env_value(key: str, default: Any = None, type_func: callable = str) -> Any:
@@ -149,7 +151,9 @@ class APIConfig:
 
         # Log warning if Binance credentials are found in configuration
         if self.binance_api_key or self.binance_secret_key:
-            print("⚠️ Binance credentials found in configuration. Consider using database storage for better security.")
+            print(
+                "⚠️ Binance credentials found in configuration. Consider using database storage for better security."
+            )
 
         self.groq_api_key = get_env_value("GROQ_API_KEY")
         self.alpha_vantage_key = get_env_value("ALPHA_VANTAGE_API_KEY")
@@ -340,8 +344,12 @@ class ConfigManager:
     def validate_config(self) -> Dict[str, bool]:
         """Validate configuration and return status."""
         validation_results = {
-            "binance_api_key": bool(self.api.binance_api_key),  # Optional - can be retrieved from database
-            "binance_secret_key": bool(self.api.binance_secret_key),  # Optional - can be retrieved from database
+            "binance_api_key": bool(
+                self.api.binance_api_key
+            ),  # Optional - can be retrieved from database
+            "binance_secret_key": bool(
+                self.api.binance_secret_key
+            ),  # Optional - can be retrieved from database
             "groq_api_key": bool(self.api.groq_api_key),
             "trading_params": all(
                 [
@@ -360,8 +368,13 @@ class ConfigManager:
         }
 
         # Log information about Binance credentials
-        if not validation_results["binance_api_key"] or not validation_results["binance_secret_key"]:
-            print("ℹ️ Binance credentials not found in environment variables. Will retrieve from database when needed.")
+        if (
+            not validation_results["binance_api_key"]
+            or not validation_results["binance_secret_key"]
+        ):
+            print(
+                "ℹ️ Binance credentials not found in environment variables. Will retrieve from database when needed."
+            )
 
         return validation_results
 

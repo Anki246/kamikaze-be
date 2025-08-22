@@ -138,7 +138,7 @@ async def save_testnet_credentials(
 
 @router.get("/testnet", response_model=CredentialsResponse)
 async def get_testnet_credentials(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Get all testnet credentials for the authenticated user."""
     try:
@@ -225,7 +225,7 @@ async def save_binance_credentials(
 
 @router.get("/binance", response_model=CredentialsResponse)
 async def get_binance_credentials(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Get Binance credentials status for the authenticated user."""
     try:
@@ -244,21 +244,29 @@ async def get_binance_credentials(
         status = {
             "mainnet": {
                 "configured": has_mainnet,
-                "created_at": credentials["mainnet"]["created_at"]
-                if credentials["mainnet"]
-                else None,
-                "updated_at": credentials["mainnet"]["updated_at"]
-                if credentials["mainnet"]
-                else None,
+                "created_at": (
+                    credentials["mainnet"]["created_at"]
+                    if credentials["mainnet"]
+                    else None
+                ),
+                "updated_at": (
+                    credentials["mainnet"]["updated_at"]
+                    if credentials["mainnet"]
+                    else None
+                ),
             },
             "testnet": {
                 "configured": has_testnet,
-                "created_at": credentials["testnet"]["created_at"]
-                if credentials["testnet"]
-                else None,
-                "updated_at": credentials["testnet"]["updated_at"]
-                if credentials["testnet"]
-                else None,
+                "created_at": (
+                    credentials["testnet"]["created_at"]
+                    if credentials["testnet"]
+                    else None
+                ),
+                "updated_at": (
+                    credentials["testnet"]["updated_at"]
+                    if credentials["testnet"]
+                    else None
+                ),
             },
         }
 

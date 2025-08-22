@@ -91,21 +91,29 @@ async def get_user_status(current_user: Dict[str, Any] = Depends(get_current_use
             "credentials": {
                 "binance_mainnet": {
                     "configured": binance_creds["mainnet"] is not None,
-                    "created_at": binance_creds["mainnet"]["created_at"]
-                    if binance_creds["mainnet"]
-                    else None,
-                    "updated_at": binance_creds["mainnet"]["updated_at"]
-                    if binance_creds["mainnet"]
-                    else None,
+                    "created_at": (
+                        binance_creds["mainnet"]["created_at"]
+                        if binance_creds["mainnet"]
+                        else None
+                    ),
+                    "updated_at": (
+                        binance_creds["mainnet"]["updated_at"]
+                        if binance_creds["mainnet"]
+                        else None
+                    ),
                 },
                 "binance_testnet": {
                     "configured": binance_creds["testnet"] is not None,
-                    "created_at": binance_creds["testnet"]["created_at"]
-                    if binance_creds["testnet"]
-                    else None,
-                    "updated_at": binance_creds["testnet"]["updated_at"]
-                    if binance_creds["testnet"]
-                    else None,
+                    "created_at": (
+                        binance_creds["testnet"]["created_at"]
+                        if binance_creds["testnet"]
+                        else None
+                    ),
+                    "updated_at": (
+                        binance_creds["testnet"]["updated_at"]
+                        if binance_creds["testnet"]
+                        else None
+                    ),
                 },
                 "testnet_exchanges": [
                     {
@@ -138,7 +146,7 @@ async def get_user_status(current_user: Dict[str, Any] = Depends(get_current_use
 
 @router.get("/connection-status", response_model=ConnectionStatusResponse)
 async def get_connection_status(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Get detailed connection status for all configured exchanges."""
     try:
@@ -256,9 +264,9 @@ async def get_connection_status(
                                 testnet_cred["secret_key"],
                                 is_testnet=True,
                             )
-                            connection_status["binance_testnet"][
-                                "connected"
-                            ] = test_result["success"]
+                            connection_status["binance_testnet"]["connected"] = (
+                                test_result["success"]
+                            )
                             connection_status["binance_testnet"]["status"] = (
                                 "connected" if test_result["success"] else "error"
                             )
@@ -404,7 +412,7 @@ async def switch_environment(
 
 @router.get("/available-environments")
 async def get_available_environments(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Get list of available environments for the user."""
     try:

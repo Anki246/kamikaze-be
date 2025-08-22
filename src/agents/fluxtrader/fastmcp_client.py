@@ -303,7 +303,7 @@ class FluxTraderMCPClient:
 
 
 async def create_binance_client(
-    env_vars: Optional[Dict[str, str]] = None
+    env_vars: Optional[Dict[str, str]] = None,
 ) -> FluxTraderMCPClient:
     """Create and connect to Binance FastMCP server"""
     server_path = str(

@@ -109,7 +109,7 @@ except ImportError:
 
 # Load configuration from centralized system
 try:
-    from infrastructure.config_loader import initialize_config, get_config_value
+    from infrastructure.config_loader import get_config_value, initialize_config
 
     initialize_config()
 
@@ -121,6 +121,7 @@ except ImportError:
     # Fallback function for direct environment variable access
     def get_env_value(key: str, default: Any = None) -> Any:
         return os.getenv(key, default)
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -709,9 +710,9 @@ class TechnicalAnalysisMCPServer:
                                 "strength": self._interpret_correlation_strength(
                                     correlation
                                 ),
-                                "direction": "positive"
-                                if correlation > 0
-                                else "negative",
+                                "direction": (
+                                    "positive" if correlation > 0 else "negative"
+                                ),
                             }
 
                 except Exception as e:
@@ -809,22 +810,30 @@ class TechnicalAnalysisMCPServer:
                     timeframe_data = {
                         "candles": df.tail(limit).to_dict("records"),
                         "current_price": float(df["close"].iloc[-1]),
-                        "24h_change": float(
-                            (df["close"].iloc[-1] - df["close"].iloc[-25])
-                            / df["close"].iloc[-25]
-                            * 100
-                        )
-                        if len(df) >= 25
-                        else 0,
-                        "volume_24h": float(df["volume"].tail(24).sum())
-                        if len(df) >= 24
-                        else float(df["volume"].sum()),
-                        "high_24h": float(df["high"].tail(24).max())
-                        if len(df) >= 24
-                        else float(df["high"].max()),
-                        "low_24h": float(df["low"].tail(24).min())
-                        if len(df) >= 24
-                        else float(df["low"].min()),
+                        "24h_change": (
+                            float(
+                                (df["close"].iloc[-1] - df["close"].iloc[-25])
+                                / df["close"].iloc[-25]
+                                * 100
+                            )
+                            if len(df) >= 25
+                            else 0
+                        ),
+                        "volume_24h": (
+                            float(df["volume"].tail(24).sum())
+                            if len(df) >= 24
+                            else float(df["volume"].sum())
+                        ),
+                        "high_24h": (
+                            float(df["high"].tail(24).max())
+                            if len(df) >= 24
+                            else float(df["high"].max())
+                        ),
+                        "low_24h": (
+                            float(df["low"].tail(24).min())
+                            if len(df) >= 24
+                            else float(df["low"].min())
+                        ),
                     }
 
                     # Convert timestamps to ISO format
@@ -882,11 +891,11 @@ class TechnicalAnalysisMCPServer:
                                 "values": rsi_values.tail(20).tolist(),
                                 "overbought": current_rsi > 70,
                                 "oversold": current_rsi < 30,
-                                "signal": "BUY"
-                                if current_rsi < 30
-                                else "SELL"
-                                if current_rsi > 70
-                                else "NEUTRAL",
+                                "signal": (
+                                    "BUY"
+                                    if current_rsi < 30
+                                    else "SELL" if current_rsi > 70 else "NEUTRAL"
+                                ),
                             }
 
                     elif indicator.upper() == "MACD":
@@ -1027,11 +1036,11 @@ class TechnicalAnalysisMCPServer:
                 "current_price": current_price,
                 "bb_position": bb_position,
                 "squeeze": (current_upper - current_lower) / current_middle < 0.1,
-                "signal": "SELL"
-                if current_price > current_upper
-                else "BUY"
-                if current_price < current_lower
-                else "NEUTRAL",
+                "signal": (
+                    "SELL"
+                    if current_price > current_upper
+                    else "BUY" if current_price < current_lower else "NEUTRAL"
+                ),
             }
 
         except Exception as e:
@@ -1119,9 +1128,7 @@ class TechnicalAnalysisMCPServer:
                 "signal": (
                     "BUY"
                     if current_k < 20 and current_d < 20
-                    else "SELL"
-                    if current_k > 80 and current_d > 80
-                    else "NEUTRAL"
+                    else "SELL" if current_k > 80 and current_d > 80 else "NEUTRAL"
                 ),
             }
 

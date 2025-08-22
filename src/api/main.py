@@ -184,12 +184,14 @@ app.add_middleware(UserContextMiddleware)
 # Add security scheme for Swagger UI
 security = HTTPBearer()
 
+
 # Configure OpenAPI security scheme
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
 
     from fastapi.openapi.utils import get_openapi
+
     openapi_schema = get_openapi(
         title=app.title,
         version=app.version,
@@ -203,7 +205,7 @@ def custom_openapi():
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
-            "description": "Enter your Bearer token in the format: Bearer <token>"
+            "description": "Enter your Bearer token in the format: Bearer <token>",
         }
     }
 
@@ -212,14 +214,21 @@ def custom_openapi():
         for method, operation in path_item.items():
             if method in ["get", "post", "put", "delete", "patch"]:
                 # Check if this endpoint requires authentication
-                if any("Authorization" in str(param) for param in operation.get("parameters", [])) or \
-                   any("HTTPAuthorizationCredentials" in str(dep) for dep in operation.get("dependencies", [])):
+                if any(
+                    "Authorization" in str(param)
+                    for param in operation.get("parameters", [])
+                ) or any(
+                    "HTTPAuthorizationCredentials" in str(dep)
+                    for dep in operation.get("dependencies", [])
+                ):
                     operation["security"] = [{"BearerAuth": []}]
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
+
 app.openapi = custom_openapi
+
 
 # Simple login endpoint for Swagger UI testing
 @app.post("/auth/login", tags=["Authentication"], summary="Simple login for Swagger UI")
@@ -228,8 +237,9 @@ async def simple_login(email: str, password: str):
     Simple login endpoint that returns just the access token for easy copy-paste into Swagger UI.
     Use this for testing in Swagger UI - just copy the returned token and paste it in the Authorize button.
     """
-    from src.api.routes.auth_routes import signin
     from pydantic import BaseModel
+
+    from src.api.routes.auth_routes import signin
 
     class LoginRequest(BaseModel):
         email: str
@@ -241,10 +251,11 @@ async def simple_login(email: str, password: str):
     if result.get("success"):
         return {
             "access_token": result["access_token"],
-            "instructions": "Copy this token and paste it in the 'Authorize' button above (include 'Bearer ' prefix)"
+            "instructions": "Copy this token and paste it in the 'Authorize' button above (include 'Bearer ' prefix)",
         }
     else:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
 
 # Include routers
 app.include_router(database_router)
@@ -353,9 +364,9 @@ async def health_check():
         },
         "services": {
             "agent_manager": agent_manager.is_healthy() if agent_manager else False,
-            "websocket_manager": websocket_manager.is_healthy()
-            if websocket_manager
-            else False,
+            "websocket_manager": (
+                websocket_manager.is_healthy() if websocket_manager else False
+            ),
             "market_data_api": market_data_api.connected if market_data_api else False,
             "database": db_status,
             "aws_secrets": aws_status,
@@ -378,9 +389,9 @@ async def database_health_check():
                 "port": db_config.port,
                 "database": db_config.database,
                 "ssl_mode": db_config.ssl_mode,
-                "connection_source": "aws_secrets"
-                if db_config.host != "localhost"
-                else "environment",
+                "connection_source": (
+                    "aws_secrets" if db_config.host != "localhost" else "environment"
+                ),
             },
             "timestamp": datetime.utcnow().isoformat(),
         }
@@ -400,7 +411,10 @@ async def aws_health_check():
 
     try:
         # Import centralized configuration
-        from ..infrastructure.config_loader import get_config_value, should_use_aws_secrets
+        from ..infrastructure.config_loader import (
+            get_config_value,
+            should_use_aws_secrets,
+        )
 
         if should_use_aws_secrets():
             secrets_manager = AWSSecretsManager()
@@ -411,9 +425,9 @@ async def aws_health_check():
                 "status": "healthy",
                 "aws_region": get_config_value("AWS_DEFAULT_REGION", "us-east-1"),
                 "secrets_manager": "connected",
-                "database_credentials": "available"
-                if db_credentials
-                else "unavailable",
+                "database_credentials": (
+                    "available" if db_credentials else "unavailable"
+                ),
                 "timestamp": datetime.utcnow().isoformat(),
             }
         else:

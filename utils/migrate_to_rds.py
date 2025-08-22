@@ -35,13 +35,16 @@ print(f"🐍 Python executable: {sys.executable}")
 print(f"🐍 Python version: {sys.version}")
 try:
     import boto3
+
     print(f"✅ boto3 available in migration script: {boto3.__version__}")
 except ImportError as e:
     print(f"❌ boto3 not available in migration script: {e}")
     print("Installing boto3...")
     import subprocess
+
     subprocess.check_call([sys.executable, "-m", "pip", "install", "boto3"])
     import boto3
+
     print(f"✅ boto3 installed and imported: {boto3.__version__}")
 
 try:
@@ -52,7 +55,8 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from infrastructure.aws_secrets_manager import SecretsManager, AWS_AVAILABLE
+    from infrastructure.aws_secrets_manager import AWS_AVAILABLE, SecretsManager
+
     print(f"✅ SecretsManager imported successfully, AWS_AVAILABLE: {AWS_AVAILABLE}")
 except ImportError as e:
     print(f"❌ Cannot import SecretsManager: {e}")
@@ -66,18 +70,15 @@ except ImportError as e:
 log_file = project_root / f'migration_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
 
 class DatabaseMigrator:
     """Handles migration from local PostgreSQL to AWS RDS."""
-    
+
     def __init__(self, dry_run: bool = False):
         """Initialize the migrator."""
         self.dry_run = dry_run
@@ -90,19 +91,19 @@ class DatabaseMigrator:
 
         self.secrets_manager = SecretsManager(region_name="us-east-1")
         self.migration_stats = {
-            'tables_migrated': 0,
-            'rows_migrated': 0,
-            'errors': 0,
-            'start_time': None,
-            'end_time': None
+            "tables_migrated": 0,
+            "rows_migrated": 0,
+            "errors": 0,
+            "start_time": None,
+            "end_time": None,
         }
-        
+
     async def connect_databases(self) -> bool:
         """Connect to both local and RDS databases."""
         try:
             # Get local database password securely
             local_password = getpass.getpass("🔐 Enter local PostgreSQL password: ")
-            
+
             # Connect to local PostgreSQL
             logger.info("🔗 Connecting to local PostgreSQL database...")
             self.local_conn = await asyncpg.connect(
@@ -110,22 +111,24 @@ class DatabaseMigrator:
                 port=5432,
                 user="postgres",
                 password=local_password,
-                database="kamikaze"
+                database="kamikaze",
             )
             logger.info("✅ Connected to local PostgreSQL")
-            
+
             # Get RDS credentials from AWS Secrets Manager
             logger.info("🔐 Retrieving RDS credentials from AWS Secrets Manager...")
             try:
                 rds_creds = await self.secrets_manager.get_database_credentials()
                 if not rds_creds:
-                    logger.error("❌ Failed to retrieve RDS credentials from AWS Secrets Manager")
+                    logger.error(
+                        "❌ Failed to retrieve RDS credentials from AWS Secrets Manager"
+                    )
                     return False
                 logger.info(f"✅ Retrieved RDS credentials for {rds_creds.host}")
             except Exception as e:
                 logger.error(f"❌ Error retrieving RDS credentials: {e}")
                 return False
-            
+
             # Connect to RDS
             logger.info(f"🔗 Connecting to RDS database at {rds_creds.host}...")
             try:
@@ -136,9 +139,9 @@ class DatabaseMigrator:
                         user=rds_creds.username,
                         password=rds_creds.password,
                         database=rds_creds.database,
-                        ssl='prefer'  # Try SSL but fall back if needed
+                        ssl="prefer",  # Try SSL but fall back if needed
                     ),
-                    timeout=30  # 30 second timeout
+                    timeout=30,  # 30 second timeout
                 )
                 logger.info("✅ Connected to RDS database")
                 return True
@@ -146,19 +149,26 @@ class DatabaseMigrator:
                 logger.error("❌ RDS connection timed out after 30 seconds")
                 logger.error("   This usually means:")
                 logger.error("   1. RDS instance is not publicly accessible")
-                logger.error("   2. Security group doesn't allow connections from your IP")
-                logger.error("   3. RDS instance is in a private subnet without internet access")
+                logger.error(
+                    "   2. Security group doesn't allow connections from your IP"
+                )
+                logger.error(
+                    "   3. RDS instance is in a private subnet without internet access"
+                )
                 return False
             except Exception as rds_e:
                 logger.error(f"❌ RDS connection failed: {rds_e}")
                 return False
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to connect to databases: {e}")
             return False
-    
-    async def get_table_list(self, include_tables: Optional[List[str]] = None, 
-                           exclude_tables: Optional[List[str]] = None) -> List[str]:
+
+    async def get_table_list(
+        self,
+        include_tables: Optional[List[str]] = None,
+        exclude_tables: Optional[List[str]] = None,
+    ) -> List[str]:
         """Get list of tables to migrate."""
         query = """
         SELECT tablename 
@@ -166,21 +176,21 @@ class DatabaseMigrator:
         WHERE schemaname = 'public' 
         ORDER BY tablename
         """
-        
+
         rows = await self.local_conn.fetch(query)
-        all_tables = [row['tablename'] for row in rows]
-        
+        all_tables = [row["tablename"] for row in rows]
+
         if include_tables:
             tables = [t for t in all_tables if t in include_tables]
         else:
             tables = all_tables
-            
+
         if exclude_tables:
             tables = [t for t in tables if t not in exclude_tables]
-            
+
         logger.info(f"📋 Found {len(tables)} tables to migrate: {', '.join(tables)}")
         return tables
-    
+
     async def get_table_dependencies(self, tables: List[str]) -> Dict[str, Set[str]]:
         """Get foreign key dependencies between tables."""
         query = """
@@ -196,31 +206,35 @@ class DatabaseMigrator:
             AND tc.table_schema = 'public'
             AND tc.table_name = ANY($1)
         """
-        
+
         rows = await self.local_conn.fetch(query, tables)
         dependencies = {table: set() for table in tables}
-        
+
         for row in rows:
-            source = row['source_table']
-            target = row['target_table']
+            source = row["source_table"]
+            target = row["target_table"]
             if target in tables:  # Only consider dependencies within our table set
                 dependencies[source].add(target)
-        
+
         return dependencies
-    
-    def topological_sort(self, tables: List[str], dependencies: Dict[str, Set[str]]) -> List[str]:
+
+    def topological_sort(
+        self, tables: List[str], dependencies: Dict[str, Set[str]]
+    ) -> List[str]:
         """Sort tables in dependency order (dependencies first)."""
         visited = set()
         temp_visited = set()
         result = []
-        
+
         def visit(table: str):
             if table in temp_visited:
-                logger.warning(f"⚠️ Circular dependency detected involving table: {table}")
+                logger.warning(
+                    f"⚠️ Circular dependency detected involving table: {table}"
+                )
                 return
             if table in visited:
                 return
-                
+
             temp_visited.add(table)
             for dep in dependencies.get(table, set()):
                 if dep in tables:  # Only visit if it's in our migration set
@@ -228,13 +242,13 @@ class DatabaseMigrator:
             temp_visited.remove(table)
             visited.add(table)
             result.append(table)
-        
+
         for table in tables:
             if table not in visited:
                 visit(table)
-        
+
         return result
-    
+
     async def create_custom_types(self) -> bool:
         """Create all custom types (enums) needed by tables."""
         try:
@@ -253,8 +267,8 @@ class DatabaseMigrator:
             # Group enum values by type name
             types_dict = {}
             for row in type_rows:
-                type_name = row['typname']
-                enum_value = row['enumlabel']
+                type_name = row["typname"]
+                enum_value = row["enumlabel"]
                 if type_name not in types_dict:
                     types_dict[type_name] = []
                 types_dict[type_name].append(enum_value)
@@ -264,7 +278,7 @@ class DatabaseMigrator:
                 logger.info(f"🔧 Creating custom type {type_name}...")
 
                 # Format enum values for SQL
-                values_str = ', '.join([f"'{value}'" for value in enum_values])
+                values_str = ", ".join([f"'{value}'" for value in enum_values])
                 create_type_sql = f"CREATE TYPE {type_name} AS ENUM ({values_str})"
 
                 # Check if type already exists
@@ -300,7 +314,7 @@ class DatabaseMigrator:
             sequences = await self.local_conn.fetch(sequences_query)
 
             for seq in sequences:
-                seq_name = seq['sequencename']
+                seq_name = seq["sequencename"]
                 logger.info(f"🔢 Creating sequence {seq_name}...")
 
                 create_seq_sql = f"""
@@ -331,17 +345,17 @@ class DatabaseMigrator:
                 AND table_name = $1
             )
             """
-            
+
             table_exists = await self.rds_conn.fetchval(exists_query, table_name)
-            
+
             if table_exists:
                 logger.info(f"📋 Table {table_name} already exists in RDS")
                 return True
-            
+
             if self.dry_run:
                 logger.info(f"🔍 [DRY RUN] Would create table: {table_name}")
                 return True
-            
+
             # Get column definitions
             columns_query = """
             SELECT
@@ -360,13 +374,13 @@ class DatabaseMigrator:
             WHERE c.table_schema = 'public' AND c.table_name = $1
             ORDER BY c.ordinal_position
             """
-            
+
             columns = await self.local_conn.fetch(columns_query, table_name)
-            
+
             if not columns:
                 logger.error(f"❌ No columns found for table {table_name}")
                 return False
-            
+
             # Build CREATE TABLE statement
             column_defs = []
             for col in columns:
@@ -375,13 +389,17 @@ class DatabaseMigrator:
                 # Add length/precision only for appropriate types
                 if col["character_maximum_length"]:
                     col_def += f'({col["character_maximum_length"]})'
-                elif col["numeric_precision"] and col["numeric_scale"] is not None and col["data_type"] in ['numeric', 'decimal']:
+                elif (
+                    col["numeric_precision"]
+                    and col["numeric_scale"] is not None
+                    and col["data_type"] in ["numeric", "decimal"]
+                ):
                     col_def += f'({col["numeric_precision"]},{col["numeric_scale"]})'
-                
+
                 # Add NOT NULL
-                if col["is_nullable"] == 'NO':
-                    col_def += ' NOT NULL'
-                
+                if col["is_nullable"] == "NO":
+                    col_def += " NOT NULL"
+
                 # Add DEFAULT (handle sequences properly)
                 if col["column_default"]:
                     default_val = col["column_default"]
@@ -390,17 +408,21 @@ class DatabaseMigrator:
                         # For integer columns with sequence defaults, use SERIAL instead
                         col_def = f'"{col["column_name"]}" SERIAL'
                     else:
-                        col_def += f' DEFAULT {default_val}'
-                
+                        col_def += f" DEFAULT {default_val}"
+
                 column_defs.append(col_def)
-            
-            create_statement = f'CREATE TABLE "{table_name}" (\n  ' + ',\n  '.join(column_defs) + '\n);'
+
+            create_statement = (
+                f'CREATE TABLE "{table_name}" (\n  '
+                + ",\n  ".join(column_defs)
+                + "\n);"
+            )
 
             logger.info(f"🔨 Creating table {table_name} in RDS...")
             logger.debug(f"SQL: {create_statement}")
             await self.rds_conn.execute(create_statement)
             logger.info(f"✅ Created table {table_name}")
-            
+
             return True
 
         except Exception as e:
@@ -421,7 +443,9 @@ class DatabaseMigrator:
             logger.info(f"📊 Migrating {total_rows} rows from table {table_name}...")
 
             if self.dry_run:
-                logger.info(f"🔍 [DRY RUN] Would migrate {total_rows} rows from {table_name}")
+                logger.info(
+                    f"🔍 [DRY RUN] Would migrate {total_rows} rows from {table_name}"
+                )
                 return True
 
             # Clear existing data in RDS table
@@ -436,43 +460,55 @@ class DatabaseMigrator:
 
             # Get column names
             columns = list(rows[0].keys())
-            column_names = ', '.join(f'"{col}"' for col in columns)
-            placeholders = ', '.join(f'${i+1}' for i in range(len(columns)))
+            column_names = ", ".join(f'"{col}"' for col in columns)
+            placeholders = ", ".join(f"${i+1}" for i in range(len(columns)))
 
-            insert_query = f'INSERT INTO "{table_name}" ({column_names}) VALUES ({placeholders})'
+            insert_query = (
+                f'INSERT INTO "{table_name}" ({column_names}) VALUES ({placeholders})'
+            )
 
             # Insert data in batches
             batch_size = 1000
             for i in range(0, len(rows), batch_size):
-                batch = rows[i:i + batch_size]
+                batch = rows[i : i + batch_size]
                 batch_data = [tuple(row[col] for col in columns) for row in batch]
 
                 await self.rds_conn.executemany(insert_query, batch_data)
 
                 progress = min(i + batch_size, len(rows))
-                logger.info(f"  📈 Progress: {progress}/{total_rows} rows ({progress/total_rows*100:.1f}%)")
+                logger.info(
+                    f"  📈 Progress: {progress}/{total_rows} rows ({progress/total_rows*100:.1f}%)"
+                )
 
             # Verify migration
-            rds_count = await self.rds_conn.fetchval(f'SELECT COUNT(*) FROM "{table_name}"')
+            rds_count = await self.rds_conn.fetchval(
+                f'SELECT COUNT(*) FROM "{table_name}"'
+            )
 
             if rds_count == total_rows:
-                logger.info(f"✅ Successfully migrated {total_rows} rows for table {table_name}")
-                self.migration_stats['rows_migrated'] += total_rows
+                logger.info(
+                    f"✅ Successfully migrated {total_rows} rows for table {table_name}"
+                )
+                self.migration_stats["rows_migrated"] += total_rows
                 return True
             else:
-                logger.error(f"❌ Row count mismatch for {table_name}: local={total_rows}, rds={rds_count}")
+                logger.error(
+                    f"❌ Row count mismatch for {table_name}: local={total_rows}, rds={rds_count}"
+                )
                 return False
 
         except Exception as e:
             logger.error(f"❌ Failed to migrate data for table {table_name}: {e}")
-            self.migration_stats['errors'] += 1
+            self.migration_stats["errors"] += 1
             return False
 
     async def create_indexes_and_constraints(self, table_name: str) -> bool:
         """Create indexes and constraints for a table."""
         try:
             if self.dry_run:
-                logger.info(f"🔍 [DRY RUN] Would create indexes and constraints for {table_name}")
+                logger.info(
+                    f"🔍 [DRY RUN] Would create indexes and constraints for {table_name}"
+                )
                 return True
 
             # Get primary key constraints
@@ -486,14 +522,18 @@ class DatabaseMigrator:
             pk_columns = await self.local_conn.fetch(pk_query, table_name)
 
             if pk_columns:
-                pk_cols = ', '.join(f'"{col["attname"]}"' for col in pk_columns)
-                pk_constraint = f'ALTER TABLE "{table_name}" ADD PRIMARY KEY ({pk_cols})'
+                pk_cols = ", ".join(f'"{col["attname"]}"' for col in pk_columns)
+                pk_constraint = (
+                    f'ALTER TABLE "{table_name}" ADD PRIMARY KEY ({pk_cols})'
+                )
 
                 try:
                     await self.rds_conn.execute(pk_constraint)
                     logger.info(f"✅ Created primary key for {table_name}")
                 except Exception as e:
-                    logger.warning(f"⚠️ Failed to create primary key for {table_name}: {e}")
+                    logger.warning(
+                        f"⚠️ Failed to create primary key for {table_name}: {e}"
+                    )
 
             # Get indexes (excluding primary key)
             index_query = """
@@ -515,11 +555,13 @@ class DatabaseMigrator:
             indexes = await self.local_conn.fetch(index_query, table_name)
 
             for idx in indexes:
-                idx_name = idx['index_name']
-                columns = ', '.join(f'"{col}"' for col in idx['columns'])
-                unique = 'UNIQUE ' if idx['indisunique'] else ''
+                idx_name = idx["index_name"]
+                columns = ", ".join(f'"{col}"' for col in idx["columns"])
+                unique = "UNIQUE " if idx["indisunique"] else ""
 
-                create_index = f'CREATE {unique}INDEX "{idx_name}" ON "{table_name}" ({columns})'
+                create_index = (
+                    f'CREATE {unique}INDEX "{idx_name}" ON "{table_name}" ({columns})'
+                )
 
                 try:
                     await self.rds_conn.execute(create_index)
@@ -530,17 +572,24 @@ class DatabaseMigrator:
             return True
 
         except Exception as e:
-            logger.error(f"❌ Failed to create indexes/constraints for {table_name}: {e}")
+            logger.error(
+                f"❌ Failed to create indexes/constraints for {table_name}: {e}"
+            )
             return False
 
-    async def migrate_database(self, include_tables: Optional[List[str]] = None,
-                             exclude_tables: Optional[List[str]] = None,
-                             schema_only: bool = False) -> bool:
+    async def migrate_database(
+        self,
+        include_tables: Optional[List[str]] = None,
+        exclude_tables: Optional[List[str]] = None,
+        schema_only: bool = False,
+    ) -> bool:
         """Perform complete database migration."""
         try:
-            self.migration_stats['start_time'] = datetime.now()
+            self.migration_stats["start_time"] = datetime.now()
 
-            logger.info("🚀 Starting database migration from local PostgreSQL to AWS RDS")
+            logger.info(
+                "🚀 Starting database migration from local PostgreSQL to AWS RDS"
+            )
             logger.info("=" * 70)
 
             # Connect to databases
@@ -583,25 +632,25 @@ class DatabaseMigrator:
                 logger.info("\n📊 Phase 4: Migrating table data...")
                 for table in sorted_tables:
                     if await self.migrate_table_data(table):
-                        self.migration_stats['tables_migrated'] += 1
+                        self.migration_stats["tables_migrated"] += 1
                     else:
                         logger.error(f"❌ Failed to migrate data for {table}")
                         # Continue with other tables
             else:
                 logger.info("\n⏭️  Skipping data migration (schema-only mode)")
-                self.migration_stats['tables_migrated'] = len(sorted_tables)
+                self.migration_stats["tables_migrated"] = len(sorted_tables)
 
             # Phase 3: Create indexes and constraints
             logger.info("\n🔗 Phase 3: Creating indexes and constraints...")
             for table in sorted_tables:
                 await self.create_indexes_and_constraints(table)
 
-            self.migration_stats['end_time'] = datetime.now()
+            self.migration_stats["end_time"] = datetime.now()
 
             # Print summary
             self.print_migration_summary()
 
-            return self.migration_stats['errors'] == 0
+            return self.migration_stats["errors"] == 0
 
         except Exception as e:
             logger.error(f"❌ Migration failed: {e}")
@@ -611,7 +660,7 @@ class DatabaseMigrator:
 
     def print_migration_summary(self):
         """Print migration summary."""
-        duration = self.migration_stats['end_time'] - self.migration_stats['start_time']
+        duration = self.migration_stats["end_time"] - self.migration_stats["start_time"]
 
         logger.info("\n" + "=" * 70)
         logger.info("📊 MIGRATION SUMMARY")
@@ -622,7 +671,7 @@ class DatabaseMigrator:
         logger.info(f"⏱️  Duration: {duration}")
         logger.info(f"📄 Log file: {log_file}")
 
-        if self.migration_stats['errors'] == 0:
+        if self.migration_stats["errors"] == 0:
             logger.info("🎉 Migration completed successfully!")
         else:
             logger.warning("⚠️ Migration completed with errors. Check logs for details.")
@@ -637,29 +686,43 @@ class DatabaseMigrator:
 
 async def main():
     """Main migration function."""
-    parser = argparse.ArgumentParser(description='Migrate kamikaze database to AWS RDS')
-    parser.add_argument('--dry-run', action='store_true',
-                       help='Perform a dry run without making changes')
-    parser.add_argument('--schema-only', action='store_true',
-                       help='Create schema only, skip data migration')
-    parser.add_argument('--tables', type=str,
-                       help='Comma-separated list of tables to migrate (default: all)')
-    parser.add_argument('--exclude', type=str,
-                       help='Comma-separated list of tables to exclude')
+    parser = argparse.ArgumentParser(description="Migrate kamikaze database to AWS RDS")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Perform a dry run without making changes",
+    )
+    parser.add_argument(
+        "--schema-only",
+        action="store_true",
+        help="Create schema only, skip data migration",
+    )
+    parser.add_argument(
+        "--tables",
+        type=str,
+        help="Comma-separated list of tables to migrate (default: all)",
+    )
+    parser.add_argument(
+        "--exclude", type=str, help="Comma-separated list of tables to exclude"
+    )
 
     args = parser.parse_args()
 
-    include_tables = args.tables.split(',') if args.tables else None
-    exclude_tables = args.exclude.split(',') if args.exclude else None
+    include_tables = args.tables.split(",") if args.tables else None
+    exclude_tables = args.exclude.split(",") if args.exclude else None
 
     # Check AWS credentials (allow auto-fetch from secrets)
-    has_env_creds = bool(os.getenv('AWS_ACCESS_KEY_ID'))
-    has_profile = bool(os.getenv('AWS_PROFILE'))
+    has_env_creds = bool(os.getenv("AWS_ACCESS_KEY_ID"))
+    has_profile = bool(os.getenv("AWS_PROFILE"))
 
     if not (has_env_creds or has_profile):
-        logger.info("🔍 No explicit AWS credentials found, will attempt auto-fetch from kmkz-app-secrets")
+        logger.info(
+            "🔍 No explicit AWS credentials found, will attempt auto-fetch from kmkz-app-secrets"
+        )
         logger.info("   If auto-fetch fails, please set up AWS credentials using:")
-        logger.info("   1. Environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY")
+        logger.info(
+            "   1. Environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY"
+        )
         logger.info("   2. AWS CLI: aws configure")
         logger.info("   3. AWS Profile: export AWS_PROFILE=your-profile")
 
@@ -668,7 +731,7 @@ async def main():
     success = await migrator.migrate_database(
         include_tables=include_tables,
         exclude_tables=exclude_tables,
-        schema_only=args.schema_only
+        schema_only=args.schema_only,
     )
 
     sys.exit(0 if success else 1)

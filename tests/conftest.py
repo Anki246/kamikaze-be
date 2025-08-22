@@ -43,10 +43,10 @@ def mock_env_vars(monkeypatch):
         "LOG_LEVEL": "DEBUG",
         "PYTHONPATH": "/app/src",
     }
-    
+
     for key, value in test_env.items():
         monkeypatch.setenv(key, value)
-    
+
     return test_env
 
 
@@ -70,23 +70,20 @@ def sample_config():
             "min_confidence": 35,
         },
         "risk_management": {
-            "trailing_stop_loss": {
-                "level_1": 1.5,
-                "level_2": 2.5,
-                "level_3": 4.0
-            }
+            "trailing_stop_loss": {"level_1": 1.5, "level_2": 2.5, "level_3": 4.0}
         },
         "trading_mode": {
             "mode": "SIMULATION",
             "enable_real_trades": False,
-            "simulation_mode": True
-        }
+            "simulation_mode": True,
+        },
     }
 
 
 @pytest.fixture
 def mock_aws_secrets(monkeypatch):
     """Mock AWS Secrets Manager for testing."""
+
     def mock_get_secret(secret_name):
         secrets = {
             "kmkz-db-secrets": {
@@ -94,17 +91,20 @@ def mock_aws_secrets(monkeypatch):
                 "port": "5432",
                 "database": "test_db",
                 "username": "test_user",
-                "password": "test_password"
+                "password": "test_password",
             },
             "kmkz-app-secrets": {
                 "groq_api_key": "test_groq_key",
                 "aws_access_key_id": "test_access_key",
-                "aws_secret_access_key": "test_secret_key"
-            }
+                "aws_secret_access_key": "test_secret_key",
+            },
         }
         return secrets.get(secret_name, {})
-    
-    monkeypatch.setattr("src.infrastructure.aws_secrets_manager.SecretsManager.get_secret", mock_get_secret)
+
+    monkeypatch.setattr(
+        "src.infrastructure.aws_secrets_manager.SecretsManager.get_secret",
+        mock_get_secret,
+    )
     return mock_get_secret
 
 
@@ -117,7 +117,7 @@ def sample_market_data():
         "price": "50000.00",
         "change_24h": "2.5",
         "volume_24h": "1000000.00",
-        "timestamp": "2024-01-01T00:00:00Z"
+        "timestamp": "2024-01-01T00:00:00Z",
     }
 
 
@@ -130,5 +130,5 @@ def sample_trade_signal():
         "confidence": 85,
         "price": 50000.0,
         "quantity": 0.001,
-        "timestamp": "2024-01-01T00:00:00Z"
+        "timestamp": "2024-01-01T00:00:00Z",
     }

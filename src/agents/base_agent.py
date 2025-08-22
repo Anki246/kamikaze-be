@@ -294,9 +294,11 @@ class BaseAgent(ABC):
             "max_drawdown": self.metrics.max_drawdown,
             "sharpe_ratio": self.metrics.sharpe_ratio,
             "uptime_seconds": self.metrics.uptime_seconds,
-            "last_trade_time": self.metrics.last_trade_time.isoformat()
-            if self.metrics.last_trade_time
-            else None,
+            "last_trade_time": (
+                self.metrics.last_trade_time.isoformat()
+                if self.metrics.last_trade_time
+                else None
+            ),
             "current_positions": self.metrics.current_positions,
         }
 

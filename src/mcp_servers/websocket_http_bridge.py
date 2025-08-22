@@ -343,8 +343,12 @@ class WebSocketHTTPBridge:
         async with websockets.serve(
             self.handle_websocket_client, host, port, ping_interval=20, ping_timeout=10
         ):
-            logger.info(f"✅ WebSocket to HTTP MCP Bridge running on ws://{host}:{port}")
-            logger.info("🔗 React frontend can now connect to MCP servers via WebSocket")
+            logger.info(
+                f"✅ WebSocket to HTTP MCP Bridge running on ws://{host}:{port}"
+            )
+            logger.info(
+                "🔗 React frontend can now connect to MCP servers via WebSocket"
+            )
 
             # Keep running
             await asyncio.Future()  # Run forever

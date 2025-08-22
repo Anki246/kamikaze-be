@@ -36,11 +36,12 @@ async def get_current_user(
     """Get current authenticated user for database operations."""
     # Import here to avoid circular imports
     from .auth_routes import get_current_user as auth_get_current_user
+
     return await auth_get_current_user(credentials)
 
 
 async def create_postgres_client(
-    env_vars: Optional[Dict[str, str]] = None
+    env_vars: Optional[Dict[str, str]] = None,
 ) -> FluxTraderMCPClient:
     """Create and connect to PostgreSQL FastMCP server"""
     server_path = str(
@@ -78,7 +79,7 @@ async def get_postgres_client() -> FluxTraderMCPClient:
 
 @router.get("/health")
 async def get_database_health(
-    current_user: Dict = Depends(get_current_user)
+    current_user: Dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get database health information."""
     try:
@@ -111,13 +112,19 @@ async def get_database_health(
                     "database": db_info.get("database"),
                     "user": db_info.get("user"),
                     "version": db_info.get("version"),
-                    "connection_source": "aws_secrets" if db_config.host != "localhost" else "environment",
-                    "ssl_mode": db_config.ssl_mode
+                    "connection_source": (
+                        "aws_secrets"
+                        if db_config.host != "localhost"
+                        else "environment"
+                    ),
+                    "ssl_mode": db_config.ssl_mode,
                 },
                 "message": "Database health retrieved successfully",
             }
         else:
-            raise HTTPException(status_code=503, detail="Database query returned no results")
+            raise HTTPException(
+                status_code=503, detail="Database query returned no results"
+            )
 
     except Exception as e:
         logger.error(f"Failed to get database health: {e}")
@@ -127,9 +134,7 @@ async def get_database_health(
 
 
 @router.get("/tables")
-async def list_tables(
-    current_user: Dict = Depends(get_current_user)
-) -> Dict[str, Any]:
+async def list_tables(current_user: Dict = Depends(get_current_user)) -> Dict[str, Any]:
     """List all tables in the database."""
     try:
         # Use direct database connection instead of MCP server
@@ -158,18 +163,17 @@ async def list_tables(
         tables = []
         if result:
             for row in result:
-                tables.append({
-                    "name": row["table_name"],
-                    "type": row["table_type"],
-                    "schema": row["table_schema"]
-                })
+                tables.append(
+                    {
+                        "name": row["table_name"],
+                        "type": row["table_type"],
+                        "schema": row["table_schema"],
+                    }
+                )
 
         return {
             "success": True,
-            "data": {
-                "tables": tables,
-                "count": len(tables)
-            },
+            "data": {"tables": tables, "count": len(tables)},
             "message": "Tables listed successfully",
         }
 

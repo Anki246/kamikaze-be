@@ -31,6 +31,7 @@ try:
     # Add parent directory to path to import config_loader
     import sys
     from pathlib import Path
+
     parent_dir = Path(__file__).parent.parent
     sys.path.insert(0, str(parent_dir))
 
@@ -39,7 +40,9 @@ try:
     initialize_config()
     print("✅ PostgreSQL FastMCP Server: Configuration initialized successfully")
 except ImportError:
-    print("⚠️ PostgreSQL FastMCP Server: Configuration system not available, using system environment variables only")
+    print(
+        "⚠️ PostgreSQL FastMCP Server: Configuration system not available, using system environment variables only"
+    )
 except Exception as e:
     print(f"⚠️ PostgreSQL FastMCP Server: Failed to initialize configuration: {e}")
     print("⚠️ PostgreSQL FastMCP Server: Using system environment variables only")
@@ -75,6 +78,7 @@ def load_database_config():
         # Import centralized configuration
         try:
             from infrastructure.config_loader import get_config_value
+
             get_env = get_config_value
         except ImportError:
             get_env = os.getenv
@@ -657,9 +661,7 @@ async def initialize_database():
                     f"✅ Database health check passed: {health['data']['database']}"
                 )
             else:
-                logger.warning(
-                    f"⚠️ Database health check failed: {health.get('error')}"
-                )
+                logger.warning(f"⚠️ Database health check failed: {health.get('error')}")
         except Exception as e:
             logger.warning(f"⚠️ Database health check error: {e}")
 
