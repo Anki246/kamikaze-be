@@ -304,7 +304,7 @@ def should_use_aws_secrets() -> bool:
 
 def clear_config_cache() -> None:
     """Clear configuration cache to force reload."""
-    global _config_initialized, _config_data
+    global _config_initialized
     _config_initialized = False
     _config_data.clear()
 

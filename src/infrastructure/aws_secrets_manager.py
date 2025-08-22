@@ -937,7 +937,3 @@ def get_kmkz_app_secret():
 
 # Alias for backward compatibility
 AWSSecretsManager = SecretsManager
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
