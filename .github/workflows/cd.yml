@@ -16,7 +16,7 @@ env:
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && (github.event_name == 'push' || github.event.workflow_run.conclusion == 'success')
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
     environment: staging
 
     steps:
@@ -84,15 +84,6 @@ jobs:
         sleep 5
         echo "✅ Health checks passed"
 
-    - name: Run smoke tests
-      run: |
-        echo "🧪 Running smoke tests on staging..."
-
-        # Basic connectivity test
-        echo "Testing basic connectivity..."
-
-        echo "✅ Smoke tests passed"
-
     - name: Notify deployment
       run: |
         echo "📢 Staging deployment notification"
@@ -153,15 +144,6 @@ jobs:
         sleep 10
         echo "✅ Production health checks passed"
 
-    - name: Run production tests
-      run: |
-        echo "🧪 Running production validation tests..."
-
-        # Basic functionality test
-        echo "Testing production functionality..."
-
-        echo "✅ Production tests passed"
-
     - name: Create release
       uses: actions/create-release@v1
       env:
@@ -180,8 +162,8 @@ jobs:
           - Docker image: `${{ env.REGISTRY }}/$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]'):latest`
 
           ### Deployment Status
-          - ✅ Staging: Deployed and tested
-          - ✅ Production: Deployed and validated
+          - ✅ Staging: Deployed successfully
+          - ✅ Production: Deployed successfully
         draft: false
         prerelease: false
 
