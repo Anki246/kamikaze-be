@@ -213,11 +213,12 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         script: |
+          IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           # Login to GitHub Container Registry
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           
           # Pull the latest image
-          docker pull ghcr.io/anki246/kamikaze-be:staging
+          docker pull ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:staging
           
           # Stop and remove the existing container
           docker stop kamikaze-be || true
@@ -228,7 +229,7 @@ jobs:
             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             -e AWS_REGION=${{ secrets.AWS_REGION }} \
-            ghcr.io/anki246/kamikaze-be:staging
+            ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:staging
           echo "✅ Health checks passed"
 
     - name: Notify deployment
