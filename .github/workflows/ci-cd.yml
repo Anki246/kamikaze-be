@@ -127,71 +127,6 @@ jobs:
         name: docker-image
         path: kamikaze-ai-latest.tar.gz
         retention-days: 1
-
-  # EC2 Deployment job - deploys Docker image to EC2 instance
-  deploy-ec2:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
-    environment: development
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
-        
-    - name: Install SSH key
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key
-        chmod 600 ~/.ssh/ec2_key
-        
-    - name: Check and install prerequisites on EC2
-      run: |
-        echo "🔍 Checking EC2 prerequisites..."
-        ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} \
-          "command -v docker >/dev/null 2>&1 || \
-           { echo 'Installing Docker...'; \
-             sudo apt-get update && \
-             sudo apt-get install -y docker.io && \
-             sudo systemctl enable docker && \
-             sudo systemctl start docker; } && \
-           sudo usermod -aG docker $USER"
-           
-    - name: Deploy to EC2
-      run: |
-        echo "🚀 Deploying to EC2 instance..."
-        scp -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no kamikaze-ai-latest.tar.gz ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }}:/tmp/
-        ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} \
-          "docker load -i /tmp/kamikaze-ai-latest.tar.gz && \
-           docker stop kamikaze-ai || true && \
-           docker rm kamikaze-ai || true && \
-           docker run -d --name kamikaze-ai -p 8000:8000 kamikaze-ai:latest"
-        
-    - name: Verify deployment
-      run: |
-        echo "🔍 Verifying EC2 deployment..."
-        ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} \
-          "docker ps | grep kamikaze-ai && \
-           docker inspect kamikaze-ai && \
-           curl -s localhost:8000/health && \
-           docker logs kamikaze-ai | head -n 20"
-           
-    - name: Validate Dockerfile
-      run: |
-        echo "🐳 Validating Dockerfile..."
-        test -f "Dockerfile" || (echo "❌ Dockerfile missing" && exit 1)
-        grep "FROM python" Dockerfile || (echo "❌ Python base image not found" && exit 1)
-        grep "COPY requirements.txt" Dockerfile || (echo "❌ requirements.txt copy not found" && exit 1)
-        grep "RUN pip install" Dockerfile || (echo "❌ pip install command not found" && exit 1)
-        grep "CMD \" || (echo "❌ CMD/ENTRYPOINT not found" && exit 1)
-        echo "✅ Dockerfile validation passed"
         
   # Staging deployment job - deploys to staging environment
   deploy-staging:
@@ -283,8 +218,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: Log in to Container Registry
       uses: docker/login-action@v3
@@ -293,48 +232,34 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Pull staging image
+    - name: Pull staging image and tag for production
       run: |
-        echo "🐳 Pulling staging Docker image..."
-
-        # Convert repository name to lowercase for Docker registry
         IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-
-        # Pull the staging image
         docker pull ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:staging
-
-    - name: Tag and push production image
-      run: |
-        echo "🐳 Tagging and pushing Docker image for production..."
-
-        # Convert repository name to lowercase for Docker registry
-        IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-
-        # Tag the staging image as latest and production
         docker tag ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:staging ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
         docker tag ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:staging ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:prod-${{ github.sha }}
-
-        # Push images
         docker push ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
         docker push ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:prod-${{ github.sha }}
 
-    - name: Deploy to production
+    - name: Install SSH key
       run: |
-        echo "🚀 Deploying to production environment..."
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key
+        chmod 600 ~/.ssh/ec2_key
 
-        # Convert repository name to lowercase for Docker registry
+    - name: Deploy to Production EC2
+      run: |
         IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+        ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+          docker pull ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
+          docker stop kamikaze-ai || true
+          docker rm kamikaze-ai || true
+          docker run -d --name kamikaze-ai -p 8000:8000 ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
+        'EOF'
 
-        echo "Image: ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest"
-        echo "Commit: ${{ github.sha }}"
-
-        # Simulate production deployment (replace with actual deployment commands)
-        echo "✅ Production deployment completed"
-
-        # Health check
-        echo "🏥 Running production health checks..."
-        sleep 10
-        echo "✅ Production health checks passed"
+    - name: Verify deployment
+      run: |
+        ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} 'docker ps | grep kamikaze-ai'
 
     - name: Create release
       uses: actions/create-release@v1
@@ -355,18 +280,9 @@ jobs:
 
           ### Deployment Status
           - ✅ Staging: Deployed successfully
-          - ✅ Production: Deployed successfully
+          - ✅ Production: Deployed successfully to EC2
         draft: false
         prerelease: false
-
-    - name: Notify production deployment
-      run: |
-        echo "📢 Production deployment notification"
-        echo "Environment: Production"
-        echo "Version: v${{ github.run_number }}"
-        echo "Commit: ${{ github.sha }}"
-        echo "Status: Success"
-        echo "Release: Created"
 
   # Rollback job - handles deployment failures
   rollback:
