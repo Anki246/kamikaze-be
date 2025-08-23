@@ -207,11 +207,11 @@ jobs:
         echo "Version: ${{ github.sha }}"
         echo "Status: Success"
 
-  # Production deployment job - deploys to production (main branch only)
+  # Production deployment job - deploys to production (cicd branch only)
   deploy-production:
     runs-on: ubuntu-latest
     needs: deploy-staging
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/cicd'
     environment: development
 
     steps:
