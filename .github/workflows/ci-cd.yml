@@ -229,8 +229,7 @@ jobs:
             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             -e AWS_REGION=${{ secrets.AWS_REGION }} \
             ghcr.io/anki246/kamikaze-be:staging
-
-        echo "✅ Health checks passed"
+          echo "✅ Health checks passed"
 
     - name: Notify deployment
       run: |
