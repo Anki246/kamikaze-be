@@ -115,13 +115,13 @@ jobs:
         docker run --rm kamikaze-ai:latest python -c "import json; print('✅ Python works')"
 
     - name: Save Docker image
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/cicd'
       run: |
         echo "💾 Saving Docker image..."
         docker save kamikaze-ai:latest | gzip > kamikaze-ai-latest.tar.gz
 
     - name: Upload Docker image artifact
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/cicd'
       uses: actions/upload-artifact@v4
       with:
         name: docker-image
@@ -132,7 +132,7 @@ jobs:
   deploy-staging:
     runs-on: ubuntu-latest
     needs: docker-build
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/cicd'
     environment: development
 
     steps:
