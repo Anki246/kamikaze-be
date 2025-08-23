@@ -128,6 +128,59 @@ jobs:
         path: kamikaze-ai-latest.tar.gz
         retention-days: 1
 
+  # EC2 Deployment job - deploys Docker image to EC2 instance
+  deploy-ec2:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+    environment: ec2
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+        
+    - name: Install SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key
+        chmod 600 ~/.ssh/ec2_key
+        
+    - name: Check and install prerequisites on EC2
+      run: |
+        echo "🔍 Checking EC2 prerequisites..."
+        ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} \
+          "command -v docker >/dev/null 2>&1 || \
+           { echo 'Installing Docker...'; \
+             sudo apt-get update && \
+             sudo apt-get install -y docker.io && \
+             sudo systemctl enable docker && \
+             sudo systemctl start docker; } && \
+           sudo usermod -aG docker $USER"
+           
+    - name: Deploy to EC2
+      run: |
+        echo "🚀 Deploying to EC2 instance..."
+        scp -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no kamikaze-ai-latest.tar.gz ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }}:/tmp/
+        ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} \
+          "docker load -i /tmp/kamikaze-ai-latest.tar.gz && \
+           docker stop kamikaze-ai || true && \
+           docker rm kamikaze-ai || true && \
+           docker run -d --name kamikaze-ai -p 8000:8000 kamikaze-ai:latest"
+        
+    - name: Verify deployment
+      run: |
+        echo "🔍 Verifying EC2 deployment..."
+        ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_PUBLIC_IP }} \
+          "docker ps | grep kamikaze-ai && \
+           curl -s localhost:8000/health"
+        
   # Staging deployment job - deploys to staging environment
   deploy-staging:
     runs-on: ubuntu-latest
