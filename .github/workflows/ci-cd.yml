@@ -136,11 +136,14 @@ jobs:
     environment: development
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - name: Download Docker image artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: docker-image
+        path: .
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+    - name: Load Docker image
+      run: docker load < kamikaze-ai-latest.tar.gz
 
     - name: Log in to Container Registry
       uses: docker/login-action@v3
@@ -149,25 +152,17 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build and push Docker image
+    - name: Tag and push Docker image
       run: |
-        echo "🐳 Building and pushing Docker image for staging..."
-
-        # Convert repository name to lowercase for Docker registry
+        echo "🐳 Tagging and pushing Docker image for staging..."
         IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-
-        # Determine tag based on branch
         if [ "${{ github.ref }}" = "refs/heads/cicd" ]; then
           BRANCH_TAG="staging"
         else
           BRANCH_TAG="dev-staging"
         fi
-
-        # Build image with appropriate tag
-        docker build -t ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:${BRANCH_TAG} .
-        docker build -t ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:${{ github.sha }} .
-
-        # Push images
+        docker tag kamikaze-ai:latest ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:${BRANCH_TAG}
+        docker tag kamikaze-ai:latest ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:${{ github.sha }}
         docker push ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:${BRANCH_TAG}
         docker push ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:${{ github.sha }}
 
@@ -232,27 +227,22 @@ jobs:
         docker push ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
         docker push ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:prod-${{ github.sha }}
 
-    - name: Deploy to Production EC2
-      uses: appleboy/ssh-action@master
+    - name: Setup SSH Agent
+      uses: webfactory/ssh-agent@v0.5.4
       with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        script: |
+        ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+
+    - name: Deploy and Verify
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
           IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           docker pull ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
           docker stop kamikaze-ai || true
           docker rm kamikaze-ai || true
           docker run -d --name kamikaze-ai -p 8000:8000 ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
-
-    - name: Verify deployment
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        script: |
+          sleep 5
           docker ps | grep kamikaze-ai
+        EOF
 
     - name: Create release
       uses: actions/create-release@v1
