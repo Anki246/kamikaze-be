@@ -232,20 +232,27 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
 
-    - name: Verify SSH Agent
-      run: |
-        ssh-add -l
-        echo "Public key:"
-        ssh-keygen -y -f <(echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}")
-
     - name: Deploy and Verify
       run: |
-        ssh -v -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+        ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          echo "Checking disk space before cleanup..."
+          df -h
+          
+          echo "Cleaning up Docker resources to free up space..."
+          docker system prune -af
+          
+          echo "Disk space after cleanup:"
+          df -h
+          
           IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           docker pull ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
+          
           docker stop kamikaze-ai || true
           docker rm kamikaze-ai || true
+          
           docker run -d --name kamikaze-ai -p 8000:8000 ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
+          
+          echo "Verifying deployment..."
           sleep 5
           docker ps | grep kamikaze-ai
         EOF
