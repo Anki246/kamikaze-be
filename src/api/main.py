@@ -77,6 +77,8 @@ logger = setup_logging("fastapi_backend")
 agent_manager: Optional[AgentManager] = None
 websocket_manager: Optional[WebSocketManager] = None
 market_data_api: Optional[MarketDataAPI] = None
+db_config: Optional[DatabaseConfig] = None
+secrets_manager: Optional[AWSSecretsManager] = None
 
 
 def json_serializer(obj):
@@ -89,14 +91,32 @@ def json_serializer(obj):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global agent_manager, websocket_manager, market_data_api
+    global agent_manager, websocket_manager, market_data_api, db_config, secrets_manager
 
     logger.info("🚀 Starting Kamikaze AI Backend...")
 
-    # Initialize managers
+    # Initialize managers and configurations
     agent_manager = AgentManager()
     websocket_manager = WebSocketManager()
     market_data_api = MarketDataAPI()
+    
+    try:
+        db_config = DatabaseConfig()
+        logger.info("✅ Database configuration initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database configuration: {e}")
+        db_config = None
+
+    try:
+        if os.getenv("USE_AWS_SECRETS", "false").lower() == "true":
+            secrets_manager = AWSSecretsManager()
+            logger.info("✅ AWS Secrets Manager initialized successfully")
+        else:
+            secrets_manager = None
+            logger.info("ℹ️ AWS Secrets Manager is disabled")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize AWS Secrets Manager: {e}")
+        secrets_manager = None
 
     # Inject WebSocket manager into agent manager
     agent_manager.set_websocket_manager(websocket_manager)
@@ -172,7 +192,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://kamikaze-8ovomajlg-ankitas-projects-77e2909a.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -326,32 +346,29 @@ async def api_info():
 @app.get("/health")
 async def health_check():
     """Health check endpoint with comprehensive service status."""
-    from infrastructure.aws_secrets_manager import AWSSecretsManager
-    from infrastructure.database_config import DatabaseConfig
-
     # Check database connectivity
     db_status = "unknown"
-    try:
-        db_config = DatabaseConfig()
-        # Simple connection test would go here
-        db_status = "connected" if db_config.host != "localhost" else "local"
-    except Exception as e:
-        db_status = f"error: {str(e)}"
+    if db_config:
+        try:
+            # A simple check, not a new connection
+            db_status = "connected" if db_config.host and db_config.host != "localhost" else "local"
+        except Exception as e:
+            db_status = f"error: {str(e)}"
+    else:
+        db_status = "uninitialized"
 
     # Check AWS Secrets Manager connectivity
     aws_status = "unknown"
-    try:
-        if (
-            os.getenv("ENVIRONMENT") == "production"
-            or os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
-        ):
-            secrets_manager = AWSSecretsManager()
-            # Test AWS connectivity
+    if secrets_manager:
+        try:
+            # A simple check, not a new connection
             aws_status = "connected"
-        else:
-            aws_status = "disabled"
-    except Exception as e:
-        aws_status = f"error: {str(e)}"
+        except Exception as e:
+            aws_status = f"error: {str(e)}"
+    elif os.getenv("USE_AWS_SECRETS", "false").lower() == "true":
+        aws_status = "uninitialized"
+    else:
+        aws_status = "disabled"
 
     return {
         "status": "healthy",
