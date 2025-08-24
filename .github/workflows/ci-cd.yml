@@ -235,25 +235,34 @@ jobs:
     - name: Deploy and Verify
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          echo "Checking for existing container on port 8000..."
-          CONTAINER_ID=$(docker ps -q --filter "publish=8000")
+          echo "Forcefully freeing port 8000..."
           
-          if [ -n "$CONTAINER_ID" ]; then
-            echo "Found running container ${CONTAINER_ID} on port 8000. Stopping and removing it."
-            docker stop $CONTAINER_ID
-            docker rm $CONTAINER_ID
+          # Find the PID of the process using port 8000
+          PID=$(sudo ss -lptn 'sport = :8000' | awk -F'pid=' '{print $2}' | awk -F',' '{print $1}')
+          
+          if [ -n "$PID" ]; then
+            echo "Process with PID ${PID} is using port 8000. Terminating it."
+            sudo kill -9 $PID
+            # Wait a moment for the OS to release the port
+            sleep 5
           else
-            echo "No container found on port 8000."
+            echo "Port 8000 is already free."
           fi
 
-          echo "Cleaning up unused Docker images and networks..."
+          # For good measure, also try to remove the container by name if it exists
+          docker stop kamikaze-ai || true
+          docker rm kamikaze-ai || true
+
+          echo "Cleaning up unused Docker images..."
           docker system prune -af
-          
+
+          echo "Pulling latest image..."
           IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           docker pull ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
-          
+
+          echo "Starting new container..."
           docker run -d --name kamikaze-ai --restart always -p 8000:8000 ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
-          
+
           echo "Verifying deployment..."
           sleep 5
           docker ps | grep kamikaze-ai
