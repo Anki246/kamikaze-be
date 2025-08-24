@@ -235,37 +235,49 @@ jobs:
     - name: Deploy and Verify
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          echo "Forcefully freeing port 8000..."
-          
-          # Find the PID of the process using port 8000
-          PID=$(sudo ss -lptn 'sport = :8000' | awk -F'pid=' '{print $2}' | awk -F',' '{print $1}')
-          
-          if [ -n "$PID" ]; then
-            echo "Process with PID ${PID} is using port 8000. Terminating it."
-            sudo kill -9 $PID
-            # Wait a moment for the OS to release the port
-            sleep 5
-          else
-            echo "Port 8000 is already free."
-          fi
+          set -ex
 
-          # For good measure, also try to remove the container by name if it exists
+          echo "Starting deployment script..."
+
+          # Aggressive cleanup: find and kill any process on port 8000
+          PID=$(sudo ss -lptn 'sport = :8000' | grep -oP 'pid=\K\d+(?=,)' || true)
+          if [ -n "$PID" ]; then
+            echo "Port 8000 is in use by PID $PID. Killing process..."
+            sudo kill -9 "$PID"
+            sleep 2
+          fi
+          
+          # Fallback: Explicitly stop and remove the container if it exists
           docker stop kamikaze-ai || true
           docker rm kamikaze-ai || true
 
+          # Restart Docker to clear any ghost processes or stuck states
+          echo "Restarting Docker service..."
+          sudo systemctl restart docker
+          sleep 5
+
+          # Final check to ensure port is free
+          if sudo ss -lptn 'sport = :8000' | grep 'LISTEN'; then
+            echo "ERROR: Port 8000 is still in use after Docker restart. Aborting."
+            exit 1
+          fi
+          
           echo "Cleaning up unused Docker images..."
           docker system prune -af
 
           echo "Pulling latest image..."
           IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           docker pull ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
-
-          echo "Starting new container..."
+          
+          echo "Running new container..."
           docker run -d --name kamikaze-ai --restart always -p 8000:8000 ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
-
+          
           echo "Verifying deployment..."
-          sleep 5
+          sleep 15
           docker ps | grep kamikaze-ai
+          # Add a health check if the app has a health endpoint
+          # curl -f http://localhost:8000/health
+          echo "Deployment successful."
         EOF
 
     - name: Create release
