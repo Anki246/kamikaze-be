@@ -65,6 +65,8 @@ from .routes.websocket_routes import set_managers as set_ws_managers
 from .services.agent_manager import AgentManager
 from .services.market_data_api import MarketDataAPI
 from .services.websocket_manager import WebSocketManager
+from ..infrastructure.aws_secrets_manager import AWSSecretsManager
+from ..infrastructure.database_config import DatabaseConfig
 
 # Add src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
