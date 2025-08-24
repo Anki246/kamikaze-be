@@ -228,13 +228,19 @@ jobs:
         docker push ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:prod-${{ github.sha }}
 
     - name: Setup SSH Agent
-      uses: webfactory/ssh-agent@v0.5.4
+      uses: webfactory/ssh-agent@v0.9.0
       with:
         ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
 
+    - name: Verify SSH Agent
+      run: |
+        ssh-add -l
+        echo "Public key:"
+        ssh-keygen -y -f <(echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}")
+
     - name: Deploy and Verify
       run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+        ssh -v -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
           IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           docker pull ${{ env.REGISTRY }}/${IMAGE_NAME_LOWER}:latest
           docker stop kamikaze-ai || true
