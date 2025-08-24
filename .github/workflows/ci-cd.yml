@@ -240,10 +240,15 @@ jobs:
           echo "Starting deployment script..."
 
           # Aggressive cleanup: find and kill any process on port 8000
-          PID=$(sudo ss -lptn 'sport = :8000' | grep -oP 'pid=\K\d+(?=,)' || true)
-          if [ -n "$PID" ]; then
-            echo "Port 8000 is in use by PID $PID. Killing process..."
-            sudo kill -9 "$PID"
+          PIDS=$(sudo ss -lptn 'sport = :8000' | grep -oP 'pid=\K\d+(?=,)' || true)
+          if [ -n "$PIDS" ]; then
+            echo "Port 8000 is in use by the following PIDs, killing them..."
+            echo "$PIDS" | while IFS= read -r pid; do
+              if [ -n "$pid" ]; then
+                echo "Killing process with PID: $pid"
+                sudo kill -9 "$pid"
+              fi
+            done
             sleep 2
           fi
           
